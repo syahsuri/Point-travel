@@ -165,6 +165,9 @@ export default function FlightMap() {
     });
     mapRef.current = map;
 
+    // Surface any WebGL/style/source failure that a blank map would hide.
+    map.on("error", (e) => console.error("[map]", e?.error ?? e));
+
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.addControl(
       new maplibregl.AttributionControl({
@@ -173,6 +176,10 @@ export default function FlightMap() {
     );
 
     map.on("load", async () => {
+      // The container may have been 0-sized at construction (dev CSS-chunk
+      // timing); re-measure now that layout is settled.
+      map.resize();
+
       // Load the plane icon (SVG -> raster) before adding the symbol layer.
       const img = new Image(28, 28);
       img.onload = async () => {
@@ -238,8 +245,15 @@ export default function FlightMap() {
   ];
 
   return (
-    <div className="relative h-screen w-screen">
-      <div ref={containerRef} className="absolute inset-0" />
+    <div
+      className="relative h-screen w-screen"
+      style={{ position: "relative", height: "100dvh", width: "100vw" }}
+    >
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{ position: "absolute", inset: 0 }}
+      />
       <div className="absolute left-4 top-14 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
         {modes.map((m) => (
           <button
