@@ -51,9 +51,13 @@ function setBasemap(map: maplibregl.Map, mode: Basemap) {
 // data we care about) scoped small.
 const INDONESIA_BOUNDS: [number, number, number, number] = [94, -11, 141, 7];
 
-// Plane icon points NORTH (up) at rest, so MapLibre's icon-rotate (degrees
-// clockwise from north) lines up directly with OpenSky's `true_track`.
-const PLANE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><path fill="#e8f0ff" stroke="#0b1622" stroke-width="0.6" stroke-linejoin="round" d="M12 2 L13.4 12 L22 16 L22 17.6 L13.4 15 L13.4 20 L16 22 L16 23 L12 21.6 L8 23 L8 22 L10.6 20 L10.6 15 L2 17.6 L2 16 L10.6 12 Z"/></svg>`;
+// Plane marker asset (public/icons/plane.svg). Aspect ~95:57.
+// icon-rotate uses `true_track` (deg clockwise from north). If the art's nose
+// does not point up at rest, adjust PLANE_ICON_ROTATE_OFFSET below.
+const PLANE_ICON_SRC = "/icons/plane.svg";
+const PLANE_ICON_W = 48;
+const PLANE_ICON_H = 29;
+const PLANE_ICON_ROTATE_OFFSET = 0; // e.g. -90 if art faces east at rest
 
 // One style holds all three basemaps. Raster (satellite/streets) layers start
 // hidden; MapLibre only fetches their tiles once made visible, so the default
@@ -218,12 +222,33 @@ function popupHTML(props: Record<string, unknown>): string {
 export default function FlightMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const [basemap, setBasemapState] = useState<Basemap>("dark");
+  const [basemap, setBasemapState] = useState<Basemap>("streets");
+  const [planeList, setPlaneList] = useState<StateVector[]>([]);
+  const [listOpen, setListOpen] = useState(true);
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
     const map = mapRef.current;
     if (map) setBasemap(map, mode);
+  }
+
+  // Fly to a plane from the list and open its popup.
+  function focusPlane(p: StateVector) {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({ center: [p.longitude, p.latitude], zoom: Math.max(map.getZoom(), 7) });
+    new maplibregl.Popup({ offset: 14 })
+      .setLngLat([p.longitude, p.latitude])
+      .setHTML(
+        popupHTML({
+          callsign: (p.callsign ?? "").trim() || "N/A",
+          baro_altitude: p.baro_altitude,
+          velocity: p.velocity,
+          on_ground: p.on_ground,
+          icao24: p.icao24,
+        })
+      )
+      .addTo(map);
   }
 
   useEffect(() => {
@@ -259,8 +284,12 @@ export default function FlightMap() {
       // timing); re-measure now that layout is settled.
       map.resize();
 
+      // Apply the default basemap (Streets) — the style ships with the dark
+      // layers visible, so flip to the chosen default now that it's loaded.
+      setBasemap(map, "streets");
+
       // Load the plane icon (SVG -> raster) before adding the symbol layer.
-      const img = new Image(28, 28);
+      const img = new Image(PLANE_ICON_W, PLANE_ICON_H);
       img.onload = async () => {
         if (!map.hasImage("plane")) {
           map.addImage("plane", img, { pixelRatio: 2 });
@@ -273,6 +302,7 @@ export default function FlightMap() {
           console.error(err);
         }
 
+        setPlaneList(planes);
         map.addSource("planes", {
           type: "geojson",
           data: planesToGeoJSON(planes),
@@ -284,8 +314,8 @@ export default function FlightMap() {
           source: "planes",
           layout: {
             "icon-image": "plane",
-            "icon-size": 0.9,
-            "icon-rotate": ["get", "track"],
+            "icon-size": 0.6,
+            "icon-rotate": ["+", ["get", "track"], PLANE_ICON_ROTATE_OFFSET],
             "icon-rotation-alignment": "map",
             "icon-allow-overlap": true,
           },
@@ -314,12 +344,13 @@ export default function FlightMap() {
             const next = await loadPlanes();
             const src = map.getSource("planes") as GeoJSONSource | undefined;
             src?.setData(planesToGeoJSON(next));
+            setPlaneList(next);
           } catch (err) {
             console.error(err); // keep last-known planes on a failed poll
           }
         }, POLL_MS);
       };
-      img.src = `data:image/svg+xml;base64,${btoa(PLANE_SVG)}`;
+      img.src = PLANE_ICON_SRC;
     });
 
     return () => {
@@ -330,9 +361,9 @@ export default function FlightMap() {
   }, []);
 
   const modes: { id: Basemap; label: string }[] = [
+    { id: "streets", label: "Streets" },
     { id: "dark", label: "Dark" },
     { id: "satellite", label: "Satellite" },
-    { id: "streets", label: "Streets" },
   ];
 
   return (
@@ -360,6 +391,57 @@ export default function FlightMap() {
             {m.label}
           </button>
         ))}
+      </div>
+
+      {/* Floating list of planes currently on the map. */}
+      <div className="absolute right-4 top-4 z-10 flex max-h-[calc(100dvh-2rem)] w-64 flex-col overflow-hidden rounded-md border border-white/10 bg-black/55 text-xs backdrop-blur">
+        <button
+          type="button"
+          onClick={() => setListOpen((v) => !v)}
+          className="flex items-center justify-between px-3 py-2 font-semibold text-white/90 hover:bg-white/5"
+        >
+          <span>Flights ({planeList.length})</span>
+          <span className="text-white/50">{listOpen ? "▾" : "▸"}</span>
+        </button>
+        {listOpen && (
+          <ul className="divide-y divide-white/5 overflow-y-auto">
+            {[...planeList]
+              .sort((a, b) => {
+                if (a.on_ground !== b.on_ground) return a.on_ground ? 1 : -1;
+                return (a.callsign ?? "").localeCompare(b.callsign ?? "");
+              })
+              .map((p) => {
+                const cs = (p.callsign ?? "").trim() || p.icao24;
+                const alt =
+                  typeof p.baro_altitude === "number"
+                    ? `${Math.round(p.baro_altitude * 3.281).toLocaleString()} ft`
+                    : "—";
+                const spd =
+                  typeof p.velocity === "number"
+                    ? `${Math.round(p.velocity * 1.944)} kts`
+                    : "—";
+                return (
+                  <li key={p.icao24}>
+                    <button
+                      type="button"
+                      onClick={() => focusPlane(p)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left hover:bg-white/10"
+                    >
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span
+                          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                            p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                          }`}
+                        />
+                        <span className="truncate font-medium text-white/90">{cs}</span>
+                      </span>
+                      <span className="shrink-0 text-white/50">{alt} · {spd}</span>
+                    </button>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
       </div>
     </div>
   );

@@ -13,3 +13,4 @@ grew.
 - [0002-basemap-switcher.md](./0002-basemap-switcher.md) — Dark / Satellite / Streets basemap switcher.
 - [0003-place-labels.md](./0003-place-labels.md) — country / province / city labels on the Dark map.
 - [0004-live-data.md](./0004-live-data.md) — live backend data via /api/planes proxy + 2-min polling.
+- [0005-flights-list-and-streets-default.md](./0005-flights-list-and-streets-default.md) — floating flights list, custom plane icon, Streets default.
