@@ -1,20 +1,45 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl, { type StyleSpecification } from "maplibre-gl";
 import { loadPlanes } from "@/lib/planes";
 import type { StateVector } from "@/lib/types";
 
 /**
- * Full-screen FlightRadar24-style map.
+ * Full-screen FlightRadar24-style map with a basemap switcher.
  *
  * MapLibre touches the DOM and WebGL, so this is a Client Component and the
  * map is created inside useEffect (never during render / on the server).
  *
- * Basemap = local Natural Earth GeoJSON rendered as dark polygons. No tile
- * server, no API key, no rate limits. Planes are drawn as a single WebGL
- * symbol layer (scales to thousands) with each icon rotated by its heading.
+ * Three basemaps live in ONE style; switching just flips layer visibility
+ * (never map.setStyle, which would wipe the planes layer + icon):
+ *   - dark      → local Natural Earth GeoJSON polygons (no tiles, lightest, default)
+ *   - satellite → ESRI World Imagery + Reference overlay (hybrid labels)
+ *   - streets   → OpenStreetMap raster
+ * All tile sources are free and need no API key. Planes are one WebGL symbol
+ * layer (scales to thousands) rotated by heading, always drawn on top.
  */
+
+type Basemap = "dark" | "satellite" | "streets";
+
+// Which layers are visible for each basemap. Anything not listed is hidden.
+const BASEMAP_LAYERS: Record<Basemap, string[]> = {
+  dark: ["land", "land-outline"],
+  satellite: ["sat", "sat-ref"],
+  streets: ["osm"],
+};
+
+const ALL_BASEMAP_LAYERS = ["land", "land-outline", "sat", "sat-ref", "osm"];
+
+function setBasemap(map: maplibregl.Map, mode: Basemap) {
+  if (!map.isStyleLoaded()) return;
+  const visible = new Set(BASEMAP_LAYERS[mode]);
+  for (const id of ALL_BASEMAP_LAYERS) {
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, "visibility", visible.has(id) ? "visible" : "none");
+    }
+  }
+}
 
 // Indonesia bounding box [west, south, east, north] — keeps the view (and the
 // data we care about) scoped small.
@@ -24,7 +49,9 @@ const INDONESIA_BOUNDS: [number, number, number, number] = [94, -11, 141, 7];
 // clockwise from north) lines up directly with OpenSky's `true_track`.
 const PLANE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><path fill="#e8f0ff" stroke="#0b1622" stroke-width="0.6" stroke-linejoin="round" d="M12 2 L13.4 12 L22 16 L22 17.6 L13.4 15 L13.4 20 L16 22 L16 23 L12 21.6 L8 23 L8 22 L10.6 20 L10.6 15 L2 17.6 L2 16 L10.6 12 Z"/></svg>`;
 
-// Minimal style with NO external tiles: dark sea background + local land GeoJSON.
+// One style holds all three basemaps. Raster (satellite/streets) layers start
+// hidden; MapLibre only fetches their tiles once made visible, so the default
+// dark map stays tile-free and light. `planes` is added later, on top of all.
 const BASE_STYLE: StyleSpecification = {
   version: 8,
   sources: {
@@ -32,9 +59,36 @@ const BASE_STYLE: StyleSpecification = {
       type: "geojson",
       data: "/data/world-110m.geojson",
     },
+    // ESRI tiles are {z}/{y}/{x}; OSM is {z}/{x}/{y} — order differs, mind it.
+    sat: {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      attribution: "Imagery © Esri",
+    },
+    "sat-ref": {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+    },
+    osm: {
+      type: "raster",
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors",
+    },
   },
   layers: [
     { id: "sea", type: "background", paint: { "background-color": "#0b1622" } },
+    // Raster basemaps — hidden until selected.
+    { id: "sat", type: "raster", source: "sat", layout: { visibility: "none" } },
+    { id: "sat-ref", type: "raster", source: "sat-ref", layout: { visibility: "none" } },
+    { id: "osm", type: "raster", source: "osm", layout: { visibility: "none" } },
+    // Dark vector basemap — visible by default.
     {
       id: "land",
       type: "fill",
@@ -89,6 +143,13 @@ function popupHTML(props: Record<string, unknown>): string {
 export default function FlightMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const [basemap, setBasemapState] = useState<Basemap>("dark");
+
+  function selectBasemap(mode: Basemap) {
+    setBasemapState(mode);
+    const map = mapRef.current;
+    if (map) setBasemap(map, mode);
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -170,5 +231,31 @@ export default function FlightMap() {
     };
   }, []);
 
-  return <div ref={containerRef} className="h-screen w-screen" />;
+  const modes: { id: Basemap; label: string }[] = [
+    { id: "dark", label: "Dark" },
+    { id: "satellite", label: "Satellite" },
+    { id: "streets", label: "Streets" },
+  ];
+
+  return (
+    <div className="relative h-screen w-screen">
+      <div ref={containerRef} className="absolute inset-0" />
+      <div className="absolute left-4 top-14 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
+        {modes.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => selectBasemap(m.id)}
+            className={`px-3 py-1.5 transition-colors ${
+              basemap === m.id
+                ? "bg-white/90 text-black"
+                : "text-white/80 hover:bg-white/10"
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
