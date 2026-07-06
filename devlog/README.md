@@ -11,3 +11,4 @@ grew.
 
 - [0001-world-map-static-planes.md](./0001-world-map-static-planes.md) — full-screen dark map + static plane markers (Indonesia).
 - [0002-basemap-switcher.md](./0002-basemap-switcher.md) — Dark / Satellite / Streets basemap switcher.
+- [0003-place-labels.md](./0003-place-labels.md) — country / province / city labels on the Dark map.

@@ -23,13 +23,16 @@ import type { StateVector } from "@/lib/types";
 type Basemap = "dark" | "satellite" | "streets";
 
 // Which layers are visible for each basemap. Anything not listed is hidden.
+// Custom text labels belong to Dark only — Satellite (ESRI reference) and
+// Streets (OSM raster) already carry their own place names.
+const DARK_LABELS = ["country-labels", "province-labels", "city-labels"];
 const BASEMAP_LAYERS: Record<Basemap, string[]> = {
-  dark: ["land", "land-outline"],
+  dark: ["land", "land-outline", ...DARK_LABELS],
   satellite: ["sat", "sat-ref"],
   streets: ["osm"],
 };
 
-const ALL_BASEMAP_LAYERS = ["land", "land-outline", "sat", "sat-ref", "osm"];
+const ALL_BASEMAP_LAYERS = ["land", "land-outline", "sat", "sat-ref", "osm", ...DARK_LABELS];
 
 function setBasemap(map: maplibregl.Map, mode: Basemap) {
   if (!map.isStyleLoaded()) return;
@@ -54,10 +57,20 @@ const PLANE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 // dark map stays tile-free and light. `planes` is added later, on top of all.
 const BASE_STYLE: StyleSpecification = {
   version: 8,
+  // Font glyphs so symbol layers can render text (MapLibre demo endpoint, no key).
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
     world: {
       type: "geojson",
       data: "/data/world-110m.geojson",
+    },
+    places: {
+      type: "geojson",
+      data: "/data/id-places.geojson",
+    },
+    provinces: {
+      type: "geojson",
+      data: "/data/id-provinces.geojson",
     },
     // ESRI tiles are {z}/{y}/{x}; OSM is {z}/{x}/{y} — order differs, mind it.
     sat: {
@@ -100,6 +113,65 @@ const BASE_STYLE: StyleSpecification = {
       type: "line",
       source: "world",
       paint: { "line-color": "#24425c", "line-width": 0.6 },
+    },
+    // Dark-only place labels (country / province / city). All share a dark halo.
+    {
+      id: "country-labels",
+      type: "symbol",
+      source: "world",
+      layout: {
+        "text-field": ["get", "NAME"],
+        "text-font": ["Noto Sans Bold"],
+        "text-transform": "uppercase",
+        "text-letter-spacing": 0.15,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 6, 16],
+      },
+      paint: {
+        "text-color": "#5f7d94",
+        "text-halo-color": "#0b1622",
+        "text-halo-width": 1.2,
+      },
+    },
+    {
+      id: "province-labels",
+      type: "symbol",
+      source: "provinces",
+      minzoom: 4.5,
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4.5, 10, 8, 15],
+      },
+      paint: {
+        "text-color": "#8fb3cc",
+        "text-halo-color": "#0b1622",
+        "text-halo-width": 1.2,
+      },
+    },
+    {
+      id: "city-labels",
+      type: "symbol",
+      source: "places",
+      minzoom: 5,
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        // Bigger cities (higher pop_max) get larger text.
+        "text-size": [
+          "interpolate",
+          ["linear"],
+          ["get", "pop_max"],
+          50000, 10,
+          2000000, 15,
+        ],
+        "text-anchor": "top",
+        "text-offset": [0, 0.4],
+      },
+      paint: {
+        "text-color": "#c6dae8",
+        "text-halo-color": "#0b1622",
+        "text-halo-width": 1.2,
+      },
     },
   ],
 };
