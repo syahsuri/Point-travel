@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import maplibregl, { type StyleSpecification } from "maplibre-gl";
+import maplibregl, {
+  type StyleSpecification,
+  type GeoJSONSource,
+} from "maplibre-gl";
 import { loadPlanes } from "@/lib/planes";
 import type { StateVector } from "@/lib/types";
 
@@ -226,6 +229,10 @@ export default function FlightMap() {
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Backend refreshes ~every 5 min; poll a bit tighter to catch updates.
+    const POLL_MS = 120_000;
+    let pollId: ReturnType<typeof setInterval> | undefined;
+
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: BASE_STYLE,
@@ -300,11 +307,23 @@ export default function FlightMap() {
         map.on("mouseleave", "planes", () => {
           map.getCanvas().style.cursor = "";
         });
+
+        // Poll the backend and update plane positions in place (no reload).
+        pollId = setInterval(async () => {
+          try {
+            const next = await loadPlanes();
+            const src = map.getSource("planes") as GeoJSONSource | undefined;
+            src?.setData(planesToGeoJSON(next));
+          } catch (err) {
+            console.error(err); // keep last-known planes on a failed poll
+          }
+        }, POLL_MS);
       };
       img.src = `data:image/svg+xml;base64,${btoa(PLANE_SVG)}`;
     });
 
     return () => {
+      if (pollId) clearInterval(pollId);
       map.remove();
       mapRef.current = null;
     };
