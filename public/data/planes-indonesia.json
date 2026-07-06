@@ -1,0 +1,25 @@
+{
+  "time": 1751788800,
+  "states": [
+    { "icao24": "8a01f2", "callsign": "GIA715",  "origin_country": "Indonesia", "longitude": 106.85, "latitude": -6.18, "baro_altitude": 3200,  "geo_altitude": 3300,  "on_ground": false, "velocity": 210, "true_track": 65 },
+    { "icao24": "8a0233", "callsign": "LNI802",  "origin_country": "Indonesia", "longitude": 107.10, "latitude": -6.45, "baro_altitude": 8500,  "geo_altitude": 8600,  "on_ground": false, "velocity": 245, "true_track": 118 },
+    { "icao24": "8a0341", "callsign": "CTV641",  "origin_country": "Indonesia", "longitude": 112.68, "latitude": -7.22, "baro_altitude": 1100,  "geo_altitude": 1200,  "on_ground": false, "velocity": 150, "true_track": 275 },
+    { "icao24": "8a0492", "callsign": "GIA308",  "origin_country": "Indonesia", "longitude": 112.90, "latitude": -7.55, "baro_altitude": 10600, "geo_altitude": 10700, "on_ground": false, "velocity": 250, "true_track": 300 },
+    { "icao24": "8a05a3", "callsign": "IDX6570", "origin_country": "Indonesia", "longitude": 115.17, "latitude": -8.72, "baro_altitude": 600,   "geo_altitude": 700,   "on_ground": false, "velocity": 120, "true_track": 95 },
+    { "icao24": "8a06b4", "callsign": "SJY262",  "origin_country": "Indonesia", "longitude": 114.95, "latitude": -8.40, "baro_altitude": 7300,  "geo_altitude": 7400,  "on_ground": false, "velocity": 235, "true_track": 250 },
+    { "icao24": "8a07c5", "callsign": "GIA181",  "origin_country": "Indonesia", "longitude": 98.68,  "latitude": 3.62,  "baro_altitude": 2400,  "geo_altitude": 2500,  "on_ground": false, "velocity": 190, "true_track": 155 },
+    { "icao24": "8a08d6", "callsign": "LNI396",  "origin_country": "Indonesia", "longitude": 99.20,  "latitude": 3.10,  "baro_altitude": 9800,  "geo_altitude": 9900,  "on_ground": false, "velocity": 248, "true_track": 205 },
+    { "icao24": "8a09e7", "callsign": "GIA602",  "origin_country": "Indonesia", "longitude": 119.42, "latitude": -5.14, "baro_altitude": 500,   "geo_altitude": 600,   "on_ground": false, "velocity": 110, "true_track": 20 },
+    { "icao24": "8a0af8", "callsign": "SJY570",  "origin_country": "Indonesia", "longitude": 119.05, "latitude": -4.80, "baro_altitude": 6600,  "geo_altitude": 6700,  "on_ground": false, "velocity": 228, "true_track": 340 },
+    { "icao24": "8a0b09", "callsign": "BTK6321", "origin_country": "Indonesia", "longitude": 110.42, "latitude": -6.98, "baro_altitude": 11000, "geo_altitude": 11100, "on_ground": false, "velocity": 252, "true_track": 88 },
+    { "icao24": "8a0c1a", "callsign": "AWQ321",  "origin_country": "Indonesia", "longitude": 109.30, "latitude": -5.90, "baro_altitude": 10200, "geo_altitude": 10300, "on_ground": false, "velocity": 246, "true_track": 272 },
+    { "icao24": "8a0d2b", "callsign": "GIA650",  "origin_country": "Indonesia", "longitude": 117.15, "latitude": -0.50, "baro_altitude": 9400,  "geo_altitude": 9500,  "on_ground": false, "velocity": 240, "true_track": 200 },
+    { "icao24": "8a0e3c", "callsign": "LNI708",  "origin_country": "Indonesia", "longitude": 116.90, "latitude": -1.25, "baro_altitude": 7800,  "geo_altitude": 7900,  "on_ground": false, "velocity": 233, "true_track": 15 },
+    { "icao24": "8a0f4d", "callsign": "SJY190",  "origin_country": "Indonesia", "longitude": 104.10, "latitude": -2.90, "baro_altitude": 8900,  "geo_altitude": 9000,  "on_ground": false, "velocity": 238, "true_track": 130 },
+    { "icao24": "8a105e", "callsign": "CTV851",  "origin_country": "Indonesia", "longitude": 100.35, "latitude": -0.88, "baro_altitude": 3600,  "geo_altitude": 3700,  "on_ground": false, "velocity": 200, "true_track": 175 },
+    { "icao24": "8a116f", "callsign": "GIA436",  "origin_country": "Indonesia", "longitude": 113.70, "latitude": -3.30, "baro_altitude": 10800, "geo_altitude": 10900, "on_ground": false, "velocity": 251, "true_track": 240 },
+    { "icao24": "8a1280", "callsign": "BTK7015", "origin_country": "Indonesia", "longitude": 108.55, "latitude": -7.35, "baro_altitude": 5400,  "geo_altitude": 5500,  "on_ground": false, "velocity": 222, "true_track": 110 },
+    { "icao24": "8a1391", "callsign": "IDX6011", "origin_country": "Indonesia", "longitude": 106.65, "latitude": -6.13, "baro_altitude": 0,     "geo_altitude": 0,     "on_ground": true,  "velocity": 12,  "true_track": 250 },
+    { "icao24": "8a14a2", "callsign": "GIA820",  "origin_country": "Indonesia", "longitude": 120.30, "latitude": -8.50, "baro_altitude": 9600,  "geo_altitude": 9700,  "on_ground": false, "velocity": 244, "true_track": 285 }
+  ]
+}

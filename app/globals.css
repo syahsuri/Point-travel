@@ -1,8 +1,9 @@
 @import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b1622;
+  --foreground: #e8f0ff;
 }
 
 @theme inline {
@@ -12,15 +13,37 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  /* Map fills the viewport; nothing should scroll the page itself. */
+  overflow: hidden;
+}
+
+/* Dark popup to match the FlightRadar-style basemap. */
+.maplibregl-popup-content {
+  background: #10202f;
+  color: #e8f0ff;
+  border: 1px solid #24425c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.maplibregl-popup-tip {
+  border-top-color: #10202f;
+  border-bottom-color: #10202f;
+}
+
+.maplibregl-popup-close-button {
+  color: #8fb3cc;
+  font-size: 16px;
 }
