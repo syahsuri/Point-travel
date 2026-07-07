@@ -205,61 +205,87 @@ function planesToGeoJSON(
         registration: p.registration,
         owner: p.owner,
         flight_status: p.flight_status,
+        last_time_position: p.last_time_position,
       },
     })),
   };
 }
 
-function popupHTML(props: Record<string, unknown>): string {
-  // All values come from an external backend — escape before injecting into HTML.
-  const esc = (v: string): string =>
-    v
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  const s = (v: unknown): string =>
-    typeof v === "string" && v.trim() !== "" ? esc(v) : "";
-  const callsign = esc(String(props.callsign ?? "N/A"));
-  const alt = props.baro_altitude;
-  const vel = props.velocity;
-  const altFt =
-    typeof alt === "number" ? `${Math.round(alt * 3.281).toLocaleString()} ft` : "—";
-  const spdKts =
-    typeof vel === "number" ? `${Math.round(vel * 1.944)} kts` : "—";
-  // Prefer the backend's flight phase (e.g. "Descending"); fall back to on/off.
-  const status = s(props.flight_status) || (props.on_ground ? "on ground" : "airborne");
+// Compact "updated Xm ago" from an ISO timestamp. Backend sends naive ISO
+// (no tz) meaning UTC — append Z so it's not read as local. "" if null/invalid.
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const withTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const ms = Date.parse(withTz);
+  if (Number.isNaN(ms)) return "";
+  const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
 
-  const origin = s(props.origin_iata);
-  const dest = s(props.destination_iata);
-  const route =
-    origin || dest ? `${origin || "???"} → ${dest || "???"}` : "";
+// Great-circle (slerp) between two [lon,lat] points -> line coordinates.
+// Unwraps longitude so a path near the antimeridian doesn't streak across the
+// whole map. Used to draw a plane's path from its origin airport to current pos.
+function greatCircle(
+  a: [number, number],
+  b: [number, number],
+  steps = 128
+): [number, number][] {
+  const R = Math.PI / 180;
+  const D = 180 / Math.PI;
+  const lon1 = a[0] * R, lat1 = a[1] * R, lon2 = b[0] * R, lat2 = b[1] * R;
+  const d =
+    2 *
+    Math.asin(
+      Math.sqrt(
+        Math.sin((lat2 - lat1) / 2) ** 2 +
+          Math.cos(lat1) * Math.cos(lat2) * Math.sin((lon2 - lon1) / 2) ** 2
+      )
+    );
+  if (d === 0) return [a, b];
+  const pts: [number, number][] = [];
+  let prevLon: number | null = null;
+  for (let i = 0; i <= steps; i++) {
+    const f = i / steps;
+    const A = Math.sin((1 - f) * d) / Math.sin(d);
+    const B = Math.sin(f * d) / Math.sin(d);
+    const x = A * Math.cos(lat1) * Math.cos(lon1) + B * Math.cos(lat2) * Math.cos(lon2);
+    const y = A * Math.cos(lat1) * Math.sin(lon1) + B * Math.cos(lat2) * Math.sin(lon2);
+    const z = A * Math.sin(lat1) + B * Math.sin(lat2);
+    const lat = Math.atan2(z, Math.hypot(x, y)) * D;
+    let lon = Math.atan2(y, x) * D;
+    if (prevLon !== null) {
+      while (lon - prevLon > 180) lon -= 360;
+      while (lon - prevLon < -180) lon += 360;
+    }
+    prevLon = lon;
+    pts.push([lon, lat]);
+  }
+  return pts;
+}
 
-  const aircraft = s(props.model) || s(props.typecode);
-  const reg = s(props.registration);
-  const owner = s(props.owner);
-
-  const line = (html: string) =>
-    html ? `<div style="color:#8fb3cc">${html}</div>` : "";
-
-  return `
-    <div style="font-weight:600;margin-bottom:4px">${callsign}${
-      route ? `<span style="color:#8fb3cc;font-weight:400"> · ${route}</span>` : ""
-    }</div>
-    ${line(owner)}
-    ${line([aircraft, reg].filter(Boolean).join(" · "))}
-    <div style="color:#8fb3cc">alt ${altFt} · spd ${spdKts}</div>
-    <div style="color:#8fb3cc">${status} · ${esc(String(props.icao24 ?? ""))}</div>
-  `;
+// Trim an ISO timestamp to "YYYY-MM-DD HH:MM" for display. Null-safe.
+function fmtSched(iso: string | null): string | null {
+  return iso ? iso.slice(0, 16).replace("T", " ") : null;
 }
 
 export default function FlightMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  // IATA -> [lon, lat], loaded once from /data/airports.json. Origin of a
+  // trajectory line comes from here (backend gives only origin_iata, not coords).
+  const airportsRef = useRef<Record<string, [number, number]>>({});
   const [basemap, setBasemapState] = useState<Basemap>("streets");
   const [planeList, setPlaneList] = useState<StateVector[]>([]);
   const [listOpen, setListOpen] = useState(true);
+  // Currently selected plane -> drives the detail sidebar.
+  const [selected, setSelected] = useState<StateVector | null>(null);
+  // Latest planes, readable from the (once-registered) map click handler.
+  const planesRef = useRef<StateVector[]>([]);
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
@@ -267,30 +293,60 @@ export default function FlightMap() {
     if (map) setBasemap(map, mode);
   }
 
-  // Fly to a plane from the list and open its popup.
-  function focusPlane(p: StateVector) {
-    const map = mapRef.current;
-    if (!map) return;
-    map.flyTo({ center: [p.longitude, p.latitude], zoom: Math.max(map.getZoom(), 7) });
-    new maplibregl.Popup({ offset: 14 })
-      .setLngLat([p.longitude, p.latitude])
-      .setHTML(
-        popupHTML({
-          callsign: (p.callsign ?? "").trim() || "N/A",
-          baro_altitude: p.baro_altitude,
-          velocity: p.velocity,
-          on_ground: p.on_ground,
-          icao24: p.icao24,
-          origin_iata: p.origin_iata,
-          destination_iata: p.destination_iata,
-          model: p.model,
-          typecode: p.typecode,
-          registration: p.registration,
-          owner: p.owner,
-          flight_status: p.flight_status,
-        })
-      )
-      .addTo(map);
+  // Clear any drawn trajectory (deselect).
+  function clearTrajectory() {
+    const src = mapRef.current?.getSource("trajectory") as
+      | GeoJSONSource
+      | undefined;
+    src?.setData({ type: "FeatureCollection", features: [] });
+  }
+
+  // Draw a great-circle path from the origin airport to the plane's current
+  // position, plus a dot at the origin. Clears if the origin IATA is unknown.
+  function drawTrajectory(
+    originIata: string | null,
+    current: [number, number]
+  ) {
+    const src = mapRef.current?.getSource("trajectory") as
+      | GeoJSONSource
+      | undefined;
+    if (!src) return;
+    const origin = originIata ? airportsRef.current[originIata] : undefined;
+    if (!origin) {
+      clearTrajectory();
+      return;
+    }
+    src.setData({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: greatCircle(origin, current) },
+          properties: {},
+        },
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: origin },
+          properties: {},
+        },
+      ],
+    });
+  }
+
+  // Select a plane: open the detail sidebar, draw its trajectory, fly to it.
+  function selectPlane(p: StateVector) {
+    setSelected(p);
+    drawTrajectory(p.origin_iata, [p.longitude, p.latitude]);
+    mapRef.current?.flyTo({
+      center: [p.longitude, p.latitude],
+      zoom: Math.max(mapRef.current.getZoom(), 7),
+    });
+  }
+
+  // Deselect: close sidebar + clear trajectory.
+  function deselectPlane() {
+    setSelected(null);
+    clearTrajectory();
   }
 
   useEffect(() => {
@@ -299,6 +355,14 @@ export default function FlightMap() {
     // Backend refreshes ~every 5 min; poll a bit tighter to catch updates.
     const POLL_MS = 120_000;
     let pollId: ReturnType<typeof setInterval> | undefined;
+
+    // Load the IATA->coords lookup once (used to anchor trajectory origins).
+    fetch("/data/airports.json")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((j) => {
+        airportsRef.current = j as Record<string, [number, number]>;
+      })
+      .catch((err) => console.error("[airports]", err));
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -345,6 +409,40 @@ export default function FlightMap() {
         }
 
         setPlaneList(planes);
+        planesRef.current = planes;
+
+        // Trajectory layers (added before `planes` so the plane icon sits on
+        // top). One source holds the line + an origin dot; filters split them.
+        map.addSource("trajectory", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "trajectory-line",
+          type: "line",
+          source: "trajectory",
+          filter: ["==", ["geometry-type"], "LineString"],
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#38bdf8",
+            "line-width": 2,
+            "line-dasharray": [2, 1.5],
+            "line-opacity": 0.9,
+          },
+        });
+        map.addLayer({
+          id: "trajectory-origin",
+          type: "circle",
+          source: "trajectory",
+          filter: ["==", ["geometry-type"], "Point"],
+          paint: {
+            "circle-radius": 4,
+            "circle-color": "#38bdf8",
+            "circle-stroke-color": "#0b1622",
+            "circle-stroke-width": 1.5,
+          },
+        });
+
         map.addSource("planes", {
           type: "geojson",
           data: planesToGeoJSON(planes),
@@ -363,15 +461,24 @@ export default function FlightMap() {
           },
         });
 
-        // Click a plane -> popup with callsign + altitude/speed.
+        // Click a plane -> open the detail sidebar + trajectory. Resolve the
+        // full record from the latest poll (GeoJSON props are lossy).
         map.on("click", "planes", (e) => {
           const f = e.features?.[0];
           if (!f) return;
-          const geom = f.geometry as GeoJSON.Point;
-          new maplibregl.Popup({ offset: 14 })
-            .setLngLat([geom.coordinates[0], geom.coordinates[1]])
-            .setHTML(popupHTML(f.properties ?? {}))
-            .addTo(map);
+          const icao = f.properties?.icao24;
+          const full =
+            typeof icao === "string"
+              ? planesRef.current.find((p) => p.icao24 === icao)
+              : undefined;
+          if (full) selectPlane(full);
+        });
+
+        // Click empty map (no plane under cursor) -> deselect (close sidebar).
+        map.on("click", (e) => {
+          if (!map.queryRenderedFeatures(e.point, { layers: ["planes"] }).length) {
+            deselectPlane();
+          }
         });
         map.on("mouseenter", "planes", () => {
           map.getCanvas().style.cursor = "pointer";
@@ -387,6 +494,11 @@ export default function FlightMap() {
             const src = map.getSource("planes") as GeoJSONSource | undefined;
             src?.setData(planesToGeoJSON(next));
             setPlaneList(next);
+            planesRef.current = next;
+            // Keep the open sidebar in sync with the freshest data.
+            setSelected((prev) =>
+              prev ? next.find((p) => p.icao24 === prev.icao24) ?? prev : null
+            );
           } catch (err) {
             console.error(err); // keep last-known planes on a failed poll
           }
@@ -400,6 +512,8 @@ export default function FlightMap() {
       map.remove();
       mapRef.current = null;
     };
+    // Map is created once; select/deselect read only stable refs + setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const modes: { id: Basemap; label: string }[] = [
@@ -407,6 +521,42 @@ export default function FlightMap() {
     { id: "dark", label: "Dark" },
     { id: "satellite", label: "Satellite" },
   ];
+
+  // Label/value rows for the detail sidebar (nulls filtered out at render).
+  const ft = (m: number | null) =>
+    typeof m === "number" ? `${Math.round(m * 3.281).toLocaleString()} ft` : null;
+  const detailRows: [string, string | null][] = selected
+    ? [
+        ["Status", selected.flight_status],
+        ["Airline", selected.owner ?? selected.operator_callsign],
+        ["Aircraft", selected.model],
+        ["Type", selected.typecode],
+        ["Maker", selected.manufacturername],
+        ["Registration", selected.registration],
+        ["From", selected.origin_iata],
+        ["To", selected.destination_iata],
+        ["Dep (sched)", fmtSched(selected.scheduled_departure)],
+        ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
+        ["Altitude", ft(selected.baro_altitude)],
+        [
+          "Speed",
+          typeof selected.velocity === "number"
+            ? `${Math.round(selected.velocity * 1.944)} kts`
+            : null,
+        ],
+        [
+          "Heading",
+          typeof selected.true_track === "number"
+            ? `${Math.round(selected.true_track)}°`
+            : null,
+        ],
+        ["Position", `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`],
+        ["Country", selected.origin_country || null],
+        ["Updated", timeAgo(selected.last_time_position) || null],
+        ["ICAO24", selected.icao24],
+        ["Trip", selected.trip_id],
+      ]
+    : [];
 
   return (
     <div
@@ -466,12 +616,16 @@ export default function FlightMap() {
                   p.origin_iata || p.destination_iata
                     ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"}`
                     : null;
+                const ago = timeAgo(p.last_time_position);
+                const meta = [p.flight_status, ago].filter(Boolean).join(" · ");
                 return (
                   <li key={p.icao24}>
                     <button
                       type="button"
-                      onClick={() => focusPlane(p)}
-                      className="flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10"
+                      onClick={() => selectPlane(p)}
+                      className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
+                        selected?.icao24 === p.icao24 ? "bg-sky-500/20" : ""
+                      }`}
                     >
                       <span className="flex w-full items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 truncate">
@@ -484,12 +638,10 @@ export default function FlightMap() {
                         </span>
                         <span className="shrink-0 text-white/50">{alt} · {spd}</span>
                       </span>
-                      {(route || p.flight_status) && (
+                      {(route || meta) && (
                         <span className="flex w-full items-center justify-between gap-2 pl-3 text-[10px] text-white/45">
                           <span className="truncate">{route ?? ""}</span>
-                          {p.flight_status && (
-                            <span className="shrink-0">{p.flight_status}</span>
-                          )}
+                          {meta && <span className="shrink-0">{meta}</span>}
                         </span>
                       )}
                     </button>
@@ -499,6 +651,49 @@ export default function FlightMap() {
           </ul>
         )}
       </div>
+
+      {/* Detail sidebar for the selected plane. */}
+      {selected && (
+        <div className="absolute left-4 top-28 z-10 flex max-h-[calc(100dvh-8rem)] w-72 flex-col overflow-hidden rounded-md border border-white/10 bg-black/70 text-xs text-white/85 backdrop-blur">
+          <div className="flex items-start justify-between gap-2 border-b border-white/10 px-3 py-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                    selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+                  }`}
+                />
+                <span className="truncate text-sm font-semibold text-white">
+                  {(selected.callsign ?? "").trim() || selected.icao24}
+                </span>
+              </div>
+              {(selected.origin_iata || selected.destination_iata) && (
+                <div className="mt-0.5 text-white/60">
+                  {selected.origin_iata ?? "???"} → {selected.destination_iata ?? "???"}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={deselectPlane}
+              aria-label="Close"
+              className="shrink-0 rounded px-1.5 text-base leading-none text-white/60 hover:bg-white/10 hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+          <dl className="divide-y divide-white/5 overflow-y-auto">
+            {detailRows
+              .filter(([, v]) => v)
+              .map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-3 px-3 py-1.5">
+                  <dt className="shrink-0 text-white/45">{label}</dt>
+                  <dd className="truncate text-right text-white/90">{value}</dd>
+                </div>
+              ))}
+          </dl>
+        </div>
+      )}
     </div>
   );
 }
