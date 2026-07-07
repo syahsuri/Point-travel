@@ -268,6 +268,36 @@ function greatCircle(
   return pts;
 }
 
+// Project a point forward along a heading (dead reckoning) on a sphere.
+// Used to animate airborne planes between polls. Returns the input unchanged
+// when velocity/heading is unavailable. lon/lat in degrees, v in m/s.
+function deadReckon(
+  lon: number,
+  lat: number,
+  velocityMs: number | null,
+  trackDeg: number | null,
+  dtSec: number
+): [number, number] {
+  if (typeof velocityMs !== "number" || typeof trackDeg !== "number" || velocityMs <= 0) {
+    return [lon, lat];
+  }
+  const R = 6371000; // earth radius, meters
+  const d = (velocityMs * dtSec) / R; // angular distance
+  const th = (trackDeg * Math.PI) / 180;
+  const la1 = (lat * Math.PI) / 180;
+  const lo1 = (lon * Math.PI) / 180;
+  const la2 = Math.asin(
+    Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(th)
+  );
+  const lo2 =
+    lo1 +
+    Math.atan2(
+      Math.sin(th) * Math.sin(d) * Math.cos(la1),
+      Math.cos(d) - Math.sin(la1) * Math.sin(la2)
+    );
+  return [(lo2 * 180) / Math.PI, (la2 * 180) / Math.PI];
+}
+
 // Trim an ISO timestamp to "YYYY-MM-DD HH:MM" for display. Null-safe.
 function fmtSched(iso: string | null): string | null {
   return iso ? iso.slice(0, 16).replace("T", " ") : null;
@@ -286,6 +316,8 @@ export default function FlightMap() {
   const [selected, setSelected] = useState<StateVector | null>(null);
   // Latest planes, readable from the (once-registered) map click handler.
   const planesRef = useRef<StateVector[]>([]);
+  // Wall-clock (ms) of the poll that produced `planesRef` — animation baseline.
+  const baseTimeRef = useRef<number>(0);
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
@@ -355,6 +387,7 @@ export default function FlightMap() {
     // Backend refreshes ~every 5 min; poll a bit tighter to catch updates.
     const POLL_MS = 120_000;
     let pollId: ReturnType<typeof setInterval> | undefined;
+    let rafId: number | undefined;
 
     // Load the IATA->coords lookup once (used to anchor trajectory origins).
     fetch("/data/airports.json")
@@ -410,6 +443,7 @@ export default function FlightMap() {
 
         setPlaneList(planes);
         planesRef.current = planes;
+        baseTimeRef.current = Date.now();
 
         // Trajectory layers (added before `planes` so the plane icon sits on
         // top). One source holds the line + an origin dot; filters split them.
@@ -487,14 +521,41 @@ export default function FlightMap() {
           map.getCanvas().style.cursor = "";
         });
 
-        // Poll the backend and update plane positions in place (no reload).
+        // Animate: project airborne planes forward from the last poll along
+        // their heading, so markers glide instead of teleporting each cycle.
+        // Sole writer of the `planes` source. Throttled to ~10 fps.
+        let lastDraw = 0;
+        const animate = () => {
+          rafId = requestAnimationFrame(animate);
+          const now = performance.now();
+          if (now - lastDraw < 100) return;
+          lastDraw = now;
+          const src = map.getSource("planes") as GeoJSONSource | undefined;
+          if (!src) return;
+          const dt = (Date.now() - baseTimeRef.current) / 1000;
+          const moved = planesRef.current.map((p) => {
+            if (p.on_ground) return p;
+            const [lng, lat] = deadReckon(
+              p.longitude,
+              p.latitude,
+              p.velocity,
+              p.true_track,
+              dt
+            );
+            return { ...p, longitude: lng, latitude: lat };
+          });
+          src.setData(planesToGeoJSON(moved));
+        };
+        rafId = requestAnimationFrame(animate);
+
+        // Poll the backend and re-baseline the animation (no direct setData —
+        // the rAF loop owns the source).
         pollId = setInterval(async () => {
           try {
             const next = await loadPlanes();
-            const src = map.getSource("planes") as GeoJSONSource | undefined;
-            src?.setData(planesToGeoJSON(next));
             setPlaneList(next);
             planesRef.current = next;
+            baseTimeRef.current = Date.now();
             // Keep the open sidebar in sync with the freshest data.
             setSelected((prev) =>
               prev ? next.find((p) => p.icao24 === prev.icao24) ?? prev : null
@@ -509,6 +570,7 @@ export default function FlightMap() {
 
     return () => {
       if (pollId) clearInterval(pollId);
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
       map.remove();
       mapRef.current = null;
     };
@@ -568,7 +630,7 @@ export default function FlightMap() {
         className="absolute inset-0"
         style={{ position: "absolute", inset: 0 }}
       />
-      <div className="absolute left-4 top-14 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
+      <div className="absolute left-4 top-4 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
         {modes.map((m) => (
           <button
             key={m.id}
@@ -654,7 +716,7 @@ export default function FlightMap() {
 
       {/* Detail sidebar for the selected plane. */}
       {selected && (
-        <div className="absolute left-4 top-28 z-10 flex max-h-[calc(100dvh-8rem)] w-72 flex-col overflow-hidden rounded-md border border-white/10 bg-black/70 text-xs text-white/85 backdrop-blur">
+        <div className="absolute left-4 top-16 z-10 flex max-h-[calc(100dvh-5rem)] w-72 flex-col overflow-hidden rounded-md border border-white/10 bg-black/70 text-xs text-white/85 backdrop-blur">
           <div className="flex items-start justify-between gap-2 border-b border-white/10 px-3 py-2">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
