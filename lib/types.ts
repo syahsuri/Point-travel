@@ -72,3 +72,25 @@ export interface StatesResponse {
   time: number;
   states: StateVector[];
 }
+
+/**
+ * A single completed/in-progress trip's actual flown track, from the backend's
+ * `/historical/{trip_id}` endpoint. Normalized by `/api/history/[tripId]`.
+ */
+export interface TripHistory {
+  trip_id: string;
+  icao24: string;
+  callsign: string | null;
+  /** ISO-8601 first position time. */
+  trip_start_time: string | null;
+  /** ISO-8601 last position time. */
+  trip_end_time: string | null;
+  /** Peak speed over ground, m/s. */
+  max_velocity: number | null;
+  /** Peak altitude, meters. */
+  max_altitude: number | null;
+  /** True once the trip is closed out. */
+  is_completed: boolean;
+  /** Flown path as [lon, lat] pairs, in chronological order. */
+  path: [number, number][];
+}

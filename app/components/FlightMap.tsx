@@ -6,7 +6,8 @@ import maplibregl, {
   type GeoJSONSource,
 } from "maplibre-gl";
 import { loadPlanes } from "@/lib/planes";
-import type { StateVector } from "@/lib/types";
+import { loadHistory } from "@/lib/history";
+import type { StateVector, TripHistory } from "@/lib/types";
 
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
@@ -314,6 +315,10 @@ export default function FlightMap() {
   const [listOpen, setListOpen] = useState(true);
   // Currently selected plane -> drives the detail sidebar.
   const [selected, setSelected] = useState<StateVector | null>(null);
+  // Actual flown track for the selection (fetched lazily on select).
+  const [history, setHistory] = useState<TripHistory | null>(null);
+  // trip_id of the in-flight history fetch, to ignore stale resolutions.
+  const historyTripRef = useRef<string | null>(null);
   // Latest planes, readable from the (once-registered) map click handler.
   const planesRef = useRef<StateVector[]>([]);
   // Wall-clock (ms) of the poll that produced `planesRef` — animation baseline.
@@ -333,52 +338,67 @@ export default function FlightMap() {
     src?.setData({ type: "FeatureCollection", features: [] });
   }
 
-  // Draw a great-circle path from the origin airport to the plane's current
-  // position, plus a dot at the origin. Clears if the origin IATA is unknown.
-  function drawTrajectory(
-    originIata: string | null,
-    current: [number, number]
-  ) {
-    const src = mapRef.current?.getSource("trajectory") as
-      | GeoJSONSource
-      | undefined;
-    if (!src) return;
+  // Render a path into the `trajectory` source: a line plus a dot at its start.
+  function setTrajectory(path: [number, number][], dashed: boolean) {
+    const map = mapRef.current;
+    const src = map?.getSource("trajectory") as GeoJSONSource | undefined;
+    if (!map || !src || path.length < 2) {
+      clearTrajectory();
+      return;
+    }
+    map.setPaintProperty(
+      "trajectory-line",
+      "line-dasharray",
+      dashed ? [2, 1.5] : [1]
+    );
+    src.setData({
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", geometry: { type: "LineString", coordinates: path }, properties: {} },
+        { type: "Feature", geometry: { type: "Point", coordinates: path[0] }, properties: {} },
+      ],
+    });
+  }
+
+  // Great-circle placeholder from the origin airport to the current position.
+  function drawTrajectory(originIata: string | null, current: [number, number]) {
     const origin = originIata ? airportsRef.current[originIata] : undefined;
     if (!origin) {
       clearTrajectory();
       return;
     }
-    src.setData({
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: greatCircle(origin, current) },
-          properties: {},
-        },
-        {
-          type: "Feature",
-          geometry: { type: "Point", coordinates: origin },
-          properties: {},
-        },
-      ],
-    });
+    setTrajectory(greatCircle(origin, current), true);
   }
 
-  // Select a plane: open the detail sidebar, draw its trajectory, fly to it.
+  // Select a plane: open sidebar, draw the great-circle placeholder + fly to it,
+  // then fetch the real flown path and replace the placeholder when it arrives.
   function selectPlane(p: StateVector) {
     setSelected(p);
+    setHistory(null);
+    historyTripRef.current = p.trip_id;
     drawTrajectory(p.origin_iata, [p.longitude, p.latitude]);
     mapRef.current?.flyTo({
       center: [p.longitude, p.latitude],
       zoom: Math.max(mapRef.current.getZoom(), 7),
     });
+    if (!p.trip_id) return;
+    loadHistory(p.trip_id)
+      .then((h) => {
+        // Ignore if the user has since selected another plane.
+        if (historyTripRef.current !== p.trip_id) return;
+        setHistory(h);
+        if (h.path.length >= 2) setTrajectory(h.path, false);
+      })
+      .catch((err) => console.error("[history]", err));
   }
 
-  // Deselect: close sidebar + clear trajectory.
+  // Deselect: close sidebar + clear trajectory, reset line style for next pick.
   function deselectPlane() {
     setSelected(null);
+    setHistory(null);
+    historyTripRef.current = null;
     clearTrajectory();
+    mapRef.current?.setPaintProperty("trajectory-line", "line-dasharray", [2, 1.5]);
   }
 
   useEffect(() => {
@@ -615,6 +635,17 @@ export default function FlightMap() {
         ["Position", `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`],
         ["Country", selected.origin_country || null],
         ["Updated", timeAgo(selected.last_time_position) || null],
+        // Trip-history extras (present once /api/history resolves for this trip).
+        ["Max alt", history ? ft(history.max_altitude) : null],
+        [
+          "Max speed",
+          typeof history?.max_velocity === "number"
+            ? `${Math.round(history.max_velocity * 1.944)} kts`
+            : null,
+        ],
+        ["Trip start", history ? fmtSched(history.trip_start_time) : null],
+        ["Trip end", history ? fmtSched(history.trip_end_time) : null],
+        ["Completed", history ? (history.is_completed ? "yes" : "no") : null],
         ["ICAO24", selected.icao24],
         ["Trip", selected.trip_id],
       ]
