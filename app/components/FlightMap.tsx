@@ -198,24 +198,59 @@ function planesToGeoJSON(
         baro_altitude: p.baro_altitude,
         velocity: p.velocity,
         on_ground: p.on_ground,
+        origin_iata: p.origin_iata,
+        destination_iata: p.destination_iata,
+        model: p.model,
+        typecode: p.typecode,
+        registration: p.registration,
+        owner: p.owner,
+        flight_status: p.flight_status,
       },
     })),
   };
 }
 
 function popupHTML(props: Record<string, unknown>): string {
-  const callsign = String(props.callsign ?? "N/A");
+  // All values come from an external backend — escape before injecting into HTML.
+  const esc = (v: string): string =>
+    v
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  const s = (v: unknown): string =>
+    typeof v === "string" && v.trim() !== "" ? esc(v) : "";
+  const callsign = esc(String(props.callsign ?? "N/A"));
   const alt = props.baro_altitude;
   const vel = props.velocity;
   const altFt =
     typeof alt === "number" ? `${Math.round(alt * 3.281).toLocaleString()} ft` : "—";
   const spdKts =
     typeof vel === "number" ? `${Math.round(vel * 1.944)} kts` : "—";
-  const status = props.on_ground ? "on ground" : "airborne";
+  // Prefer the backend's flight phase (e.g. "Descending"); fall back to on/off.
+  const status = s(props.flight_status) || (props.on_ground ? "on ground" : "airborne");
+
+  const origin = s(props.origin_iata);
+  const dest = s(props.destination_iata);
+  const route =
+    origin || dest ? `${origin || "???"} → ${dest || "???"}` : "";
+
+  const aircraft = s(props.model) || s(props.typecode);
+  const reg = s(props.registration);
+  const owner = s(props.owner);
+
+  const line = (html: string) =>
+    html ? `<div style="color:#8fb3cc">${html}</div>` : "";
+
   return `
-    <div style="font-weight:600;margin-bottom:4px">${callsign}</div>
+    <div style="font-weight:600;margin-bottom:4px">${callsign}${
+      route ? `<span style="color:#8fb3cc;font-weight:400"> · ${route}</span>` : ""
+    }</div>
+    ${line(owner)}
+    ${line([aircraft, reg].filter(Boolean).join(" · "))}
     <div style="color:#8fb3cc">alt ${altFt} · spd ${spdKts}</div>
-    <div style="color:#8fb3cc">${status} · ${String(props.icao24 ?? "")}</div>
+    <div style="color:#8fb3cc">${status} · ${esc(String(props.icao24 ?? ""))}</div>
   `;
 }
 
@@ -246,6 +281,13 @@ export default function FlightMap() {
           velocity: p.velocity,
           on_ground: p.on_ground,
           icao24: p.icao24,
+          origin_iata: p.origin_iata,
+          destination_iata: p.destination_iata,
+          model: p.model,
+          typecode: p.typecode,
+          registration: p.registration,
+          owner: p.owner,
+          flight_status: p.flight_status,
         })
       )
       .addTo(map);
@@ -420,22 +462,36 @@ export default function FlightMap() {
                   typeof p.velocity === "number"
                     ? `${Math.round(p.velocity * 1.944)} kts`
                     : "—";
+                const route =
+                  p.origin_iata || p.destination_iata
+                    ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"}`
+                    : null;
                 return (
                   <li key={p.icao24}>
                     <button
                       type="button"
                       onClick={() => focusPlane(p)}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left hover:bg-white/10"
+                      className="flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10"
                     >
-                      <span className="flex items-center gap-1.5 truncate">
-                        <span
-                          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                            p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                          }`}
-                        />
-                        <span className="truncate font-medium text-white/90">{cs}</span>
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span
+                            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                              p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                            }`}
+                          />
+                          <span className="truncate font-medium text-white/90">{cs}</span>
+                        </span>
+                        <span className="shrink-0 text-white/50">{alt} · {spd}</span>
                       </span>
-                      <span className="shrink-0 text-white/50">{alt} · {spd}</span>
+                      {(route || p.flight_status) && (
+                        <span className="flex w-full items-center justify-between gap-2 pl-3 text-[10px] text-white/45">
+                          <span className="truncate">{route ?? ""}</span>
+                          {p.flight_status && (
+                            <span className="shrink-0">{p.flight_status}</span>
+                          )}
+                        </span>
+                      )}
                     </button>
                   </li>
                 );

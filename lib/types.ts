@@ -30,6 +30,40 @@ export interface StateVector {
   velocity: number | null;
   /** Heading: decimal degrees clockwise from north (0 = north). */
   true_track: number | null;
+
+  // --- Enriched fields from the gukgukcraft backend (all optional; may be
+  // null when the backend can't resolve them). Not part of raw OpenSky. ---
+
+  /** Stable per-leg id, e.g. "71c210_KAL437_2026-07-08_1783445036". */
+  trip_id: string | null;
+  /** ICAO airline prefix, e.g. "KAL". */
+  icao_prefix: string | null;
+  /** IATA airline prefix, e.g. "KE". */
+  iata_prefix: string | null;
+  /** ISO-8601 local timestamp of the last position report. */
+  last_time_position: string | null;
+  /** Tail number, e.g. "HL8210". */
+  registration: string | null;
+  /** Airframe maker, e.g. "Boeing". */
+  manufacturername: string | null;
+  /** Full model, e.g. "Boeing 777-3B5(ER)". */
+  model: string | null;
+  /** ICAO type designator, e.g. "B77W". */
+  typecode: string | null;
+  /** Radio callsign of the operator, e.g. "KOREANAIR". */
+  operator_callsign: string | null;
+  /** Aircraft owner / airline, e.g. "Korean Air". */
+  owner: string | null;
+  /** Origin airport IATA code, e.g. "ICN". */
+  origin_iata: string | null;
+  /** Destination airport IATA code, e.g. "CGK". */
+  destination_iata: string | null;
+  /** Scheduled departure, ISO-8601. */
+  scheduled_departure: string | null;
+  /** Scheduled arrival, ISO-8601. */
+  scheduled_arrival: string | null;
+  /** Human flight phase, e.g. "Descending", "Cruising". */
+  flight_status: string | null;
 }
 
 /** A batch of plane states, matching OpenSky's `/states/all` envelope. */
