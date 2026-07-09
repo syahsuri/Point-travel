@@ -17,17 +17,11 @@ jobs:
 
   deploy:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd /path/to/your/app
-            git pull origin main
-            docker build -t next-app .
-            docker stop next-web || true
-            docker rm next-web || true
-            docker run -d --name next-web -p 3000:3000 next-app
+      - uses: actions/checkout@v4
+      - run: |
+          docker build -t next-app .
+          docker stop next-web || true
+          docker rm next-web || true
+          docker run -d --name next-web -p 3000:3000 next-app
