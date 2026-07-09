@@ -194,6 +194,11 @@ function planesToGeoJSON(
       geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
       properties: {
         icao24: p.icao24,
+        label_name:
+          p.owner ||
+          p.operator_callsign ||
+          (p.callsign ?? "").trim() ||
+          p.icao24,
         callsign: (p.callsign ?? "").trim() || "N/A",
         track: p.true_track ?? 0,
         baro_altitude: p.baro_altitude,
@@ -299,6 +304,27 @@ function deadReckon(
   return [(lo2 * 180) / Math.PI, (la2 * 180) / Math.PI];
 }
 
+// Forward-projected path from a live position: dead-reckon out to `horizonSec`
+// seconds ahead, sampled every `stepSec`. Empty when velocity/heading unknown.
+// Used for the yellow "next 2 min" prediction line of the selected plane.
+function predictPath(
+  lon: number,
+  lat: number,
+  velocityMs: number | null,
+  trackDeg: number | null,
+  horizonSec = 120,
+  stepSec = 30
+): [number, number][] {
+  if (typeof velocityMs !== "number" || typeof trackDeg !== "number" || velocityMs <= 0) {
+    return [];
+  }
+  const pts: [number, number][] = [];
+  for (let s = 0; s <= horizonSec; s += stepSec) {
+    pts.push(deadReckon(lon, lat, velocityMs, trackDeg, s));
+  }
+  return pts;
+}
+
 // Trim an ISO timestamp to "YYYY-MM-DD HH:MM" for display. Null-safe.
 function fmtSched(iso: string | null): string | null {
   return iso ? iso.slice(0, 16).replace("T", " ") : null;
@@ -323,6 +349,14 @@ export default function FlightMap() {
   const planesRef = useRef<StateVector[]>([]);
   // Wall-clock (ms) of the poll that produced `planesRef` — animation baseline.
   const baseTimeRef = useRef<number>(0);
+  // Selected plane's icao24, readable inside the rAF closure (drives the live
+  // trajectory head / prediction / label follow).
+  const selectedIcaoRef = useRef<string | null>(null);
+  // Flown/great-circle path BEHIND the plane (no live head point). The rAF loop
+  // appends the current animated position so the line stays glued to the marker.
+  const basePathRef = useRef<[number, number][]>([]);
+  // Floating label box above the selected plane.
+  const popupRef = useRef<maplibregl.Popup | null>(null);
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
@@ -373,13 +407,50 @@ export default function FlightMap() {
   // Select a plane: open sidebar, draw the great-circle placeholder + fly to it,
   // then fetch the real flown path and replace the placeholder when it arrives.
   function selectPlane(p: StateVector) {
+    const map = mapRef.current;
     setSelected(p);
     setHistory(null);
     historyTripRef.current = p.trip_id;
+    selectedIcaoRef.current = p.icao24;
+
+    // Base path behind the plane: great-circle placeholder from origin airport
+    // to current pos (replaced by the real flown path once /api/history lands).
+    const origin = p.origin_iata ? airportsRef.current[p.origin_iata] : undefined;
+    basePathRef.current = origin
+      ? greatCircle(origin, [p.longitude, p.latitude])
+      : [];
     drawTrajectory(p.origin_iata, [p.longitude, p.latitude]);
-    mapRef.current?.flyTo({
+
+    // Floating label box above the marker (icao24 + airline name).
+    const name =
+      p.owner || p.operator_callsign || (p.callsign ?? "").trim() || p.icao24;
+    popupRef.current?.remove();
+    if (map) {
+      // Build with textContent (not setHTML) — name/icao24 are untrusted backend
+      // data; string-interpolated HTML would be an XSS sink.
+      const box = document.createElement("div");
+      const nameEl = document.createElement("div");
+      nameEl.textContent = name;
+      nameEl.style.cssText = "font-weight:600;color:#fff;white-space:nowrap";
+      const idEl = document.createElement("div");
+      idEl.textContent = p.icao24;
+      idEl.style.cssText = "opacity:.55;font-size:10px;letter-spacing:.05em";
+      box.append(nameEl, idEl);
+      popupRef.current = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        anchor: "bottom",
+        offset: 18,
+        className: "plane-popup",
+      })
+        .setLngLat([p.longitude, p.latitude])
+        .setDOMContent(box)
+        .addTo(map);
+    }
+
+    map?.flyTo({
       center: [p.longitude, p.latitude],
-      zoom: Math.max(mapRef.current.getZoom(), 7),
+      zoom: Math.max(map.getZoom(), 7),
     });
     if (!p.trip_id) return;
     loadHistory(p.trip_id)
@@ -387,7 +458,10 @@ export default function FlightMap() {
         // Ignore if the user has since selected another plane.
         if (historyTripRef.current !== p.trip_id) return;
         setHistory(h);
-        if (h.path.length >= 2) setTrajectory(h.path, false);
+        if (h.path.length >= 2) {
+          basePathRef.current = h.path;
+          setTrajectory(h.path, false);
+        }
       })
       .catch((err) => console.error("[history]", err));
   }
@@ -397,7 +471,14 @@ export default function FlightMap() {
     setSelected(null);
     setHistory(null);
     historyTripRef.current = null;
+    selectedIcaoRef.current = null;
+    basePathRef.current = [];
+    popupRef.current?.remove();
+    popupRef.current = null;
     clearTrajectory();
+    (mapRef.current?.getSource("prediction") as GeoJSONSource | undefined)?.setData(
+      { type: "FeatureCollection", features: [] }
+    );
     mapRef.current?.setPaintProperty("trajectory-line", "line-dasharray", [2, 1.5]);
   }
 
@@ -497,6 +578,24 @@ export default function FlightMap() {
           },
         });
 
+        // Forward "next 2 min" prediction of the selected plane — yellow dots.
+        map.addSource("prediction", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "prediction-line",
+          type: "line",
+          source: "prediction",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#facc15",
+            "line-width": 2,
+            "line-dasharray": [0.4, 2],
+            "line-opacity": 0.9,
+          },
+        });
+
         map.addSource("planes", {
           type: "geojson",
           data: planesToGeoJSON(planes),
@@ -508,7 +607,17 @@ export default function FlightMap() {
           source: "planes",
           layout: {
             "icon-image": "plane",
-            "icon-size": 0.6,
+            // Zoom-aware, clamped so the marker stays readable — never tiny far
+            // out, never oversized zoomed in.
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              4, 0.35,
+              7, 0.55,
+              10, 0.8,
+              13, 1.0,
+            ],
             "icon-rotate": ["+", ["get", "track"], PLANE_ICON_ROTATE_OFFSET],
             "icon-rotation-alignment": "map",
             "icon-allow-overlap": true,
@@ -565,6 +674,54 @@ export default function FlightMap() {
             return { ...p, longitude: lng, latitude: lat };
           });
           src.setData(planesToGeoJSON(moved));
+
+          // Keep the selected plane's trajectory head, prediction, and label
+          // glued to its live animated position (no lag behind the marker).
+          const selIcao = selectedIcaoRef.current;
+          if (!selIcao) return;
+          const sel = moved.find((p) => p.icao24 === selIcao);
+          if (!sel) return;
+          const head: [number, number] = [sel.longitude, sel.latitude];
+
+          const traj = map.getSource("trajectory") as GeoJSONSource | undefined;
+          const base = basePathRef.current;
+          if (traj && base.length >= 1) {
+            traj.setData({
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  geometry: { type: "LineString", coordinates: [...base, head] },
+                  properties: {},
+                },
+                {
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: base[0] },
+                  properties: {},
+                },
+              ],
+            });
+          }
+
+          const pred = map.getSource("prediction") as GeoJSONSource | undefined;
+          const ppath = sel.on_ground
+            ? []
+            : predictPath(sel.longitude, sel.latitude, sel.velocity, sel.true_track);
+          pred?.setData({
+            type: "FeatureCollection",
+            features:
+              ppath.length >= 2
+                ? [
+                    {
+                      type: "Feature",
+                      geometry: { type: "LineString", coordinates: ppath },
+                      properties: {},
+                    },
+                  ]
+                : [],
+          });
+
+          popupRef.current?.setLngLat(head);
         };
         rafId = requestAnimationFrame(animate);
 
@@ -656,6 +813,17 @@ export default function FlightMap() {
       className="relative h-screen w-screen"
       style={{ position: "relative", height: "100dvh", width: "100vw" }}
     >
+      <style>{`
+        .plane-popup .maplibregl-popup-content {
+          background: rgba(0,0,0,0.75);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 6px;
+          padding: 4px 8px;
+          backdrop-filter: blur(4px);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        .plane-popup .maplibregl-popup-tip { display: none; }
+      `}</style>
       <div
         ref={containerRef}
         className="absolute inset-0"
