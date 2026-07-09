@@ -20,8 +20,11 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
       - run: |
           docker build -t next-app .
           docker stop next-web || true
           docker rm next-web || true
-          docker run -d --name next-web -p 40000:3000 next-app
+          docker run -d --name next-web --restart unless-stopped --env-file .env -p 3000:3000 next-app
+          docker image prune -f
