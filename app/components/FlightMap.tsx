@@ -233,6 +233,20 @@ function timeAgo(iso: string | null | undefined): string {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+// Parse an ISO position timestamp to unix seconds. Backend sends naive ISO
+// (no tz) meaning UTC — append Z. NaN when null/invalid.
+function posSecs(iso: string | null | undefined): number {
+  if (!iso) return NaN;
+  const withTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const ms = Date.parse(withTz);
+  return Number.isNaN(ms) ? NaN : ms / 1000;
+}
+
+// Shortest signed angular difference a-b, normalized to [-180, 180] degrees.
+function angDelta(a: number, b: number): number {
+  return ((((a - b) % 360) + 540) % 360) - 180;
+}
+
 // Great-circle (slerp) between two [lon,lat] points -> line coordinates.
 // Unwraps longitude so a path near the antimeridian doesn't streak across the
 // whole map. Used to draw a plane's path from its origin airport to current pos.
@@ -304,23 +318,30 @@ function deadReckon(
   return [(lo2 * 180) / Math.PI, (la2 * 180) / Math.PI];
 }
 
-// Forward-projected path from a live position: dead-reckon out to `horizonSec`
-// seconds ahead, sampled every `stepSec`. Empty when velocity/heading unknown.
-// Used for the yellow "next 2 min" prediction line of the selected plane.
+// Forward-projected path from a live position over `horizonSec` seconds.
+// Integrates in fine `stepSec` steps, rotating the heading by `turnRateDegPerSec`
+// each step — so a turning plane's forecast bends into a circular arc instead of
+// a straight line. Empty when velocity/heading unknown. Drives the yellow "next
+// 2 min" prediction line of the selected plane.
 function predictPath(
   lon: number,
   lat: number,
   velocityMs: number | null,
   trackDeg: number | null,
+  turnRateDegPerSec = 0,
   horizonSec = 120,
-  stepSec = 30
+  stepSec = 5
 ): [number, number][] {
   if (typeof velocityMs !== "number" || typeof trackDeg !== "number" || velocityMs <= 0) {
     return [];
   }
   const pts: [number, number][] = [];
+  let pos: [number, number] = [lon, lat];
+  let heading = trackDeg;
   for (let s = 0; s <= horizonSec; s += stepSec) {
-    pts.push(deadReckon(lon, lat, velocityMs, trackDeg, s));
+    pts.push(pos);
+    pos = deadReckon(pos[0], pos[1], velocityMs, heading, stepSec);
+    heading += turnRateDegPerSec * stepSec;
   }
   return pts;
 }
@@ -357,6 +378,10 @@ export default function FlightMap() {
   const basePathRef = useRef<[number, number][]>([]);
   // Floating label box above the selected plane.
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  // Per-icao24 last heading sample + its timestamp, to derive turn rate.
+  const prevTrackRef = useRef<Map<string, { track: number; t: number }>>(new Map());
+  // Per-icao24 turn rate in signed deg/s (derived by diffing headings).
+  const turnRateRef = useRef<Map<string, number>>(new Map());
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
@@ -479,7 +504,27 @@ export default function FlightMap() {
     (mapRef.current?.getSource("prediction") as GeoJSONSource | undefined)?.setData(
       { type: "FeatureCollection", features: [] }
     );
+    (mapRef.current?.getSource("turn-marker") as GeoJSONSource | undefined)?.setData(
+      { type: "FeatureCollection", features: [] }
+    );
     mapRef.current?.setPaintProperty("trajectory-line", "line-dasharray", [2, 1.5]);
+  }
+
+  // Derive each plane's turn rate (signed deg/s) by diffing its heading against
+  // the previous sample. Clamped to ±3 deg/s (airliner standard-rate ceiling) to
+  // reject heading jitter. Refreshes only when a newer position timestamp lands.
+  function updateTurnRates(list: StateVector[]) {
+    for (const p of list) {
+      if (typeof p.true_track !== "number") continue;
+      const t = posSecs(p.last_time_position);
+      if (Number.isNaN(t)) continue;
+      const prev = prevTrackRef.current.get(p.icao24);
+      if (prev && t > prev.t) {
+        const raw = angDelta(p.true_track, prev.track) / (t - prev.t);
+        turnRateRef.current.set(p.icao24, Math.max(-3, Math.min(3, raw)));
+      }
+      prevTrackRef.current.set(p.icao24, { track: p.true_track, t });
+    }
   }
 
   useEffect(() => {
@@ -544,6 +589,7 @@ export default function FlightMap() {
 
         setPlaneList(planes);
         planesRef.current = planes;
+        updateTurnRates(planes);
         baseTimeRef.current = Date.now();
 
         // Trajectory layers (added before `planes` so the plane icon sits on
@@ -632,6 +678,34 @@ export default function FlightMap() {
             "line-width": 2,
             "line-dasharray": [0.4, 2],
             "line-opacity": 1,
+          },
+        });
+
+        // Amber ring around the plane while it's turning (turn indicator).
+        map.addSource("turn-marker", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "turn-marker-glow",
+          type: "circle",
+          source: "turn-marker",
+          paint: {
+            "circle-radius": 16,
+            "circle-color": "#facc15",
+            "circle-blur": 1,
+            "circle-opacity": 0.35,
+          },
+        });
+        map.addLayer({
+          id: "turn-marker-ring",
+          type: "circle",
+          source: "turn-marker",
+          paint: {
+            "circle-radius": 13,
+            "circle-opacity": 0,
+            "circle-stroke-color": "#fde047",
+            "circle-stroke-width": 2,
           },
         });
 
@@ -742,10 +816,11 @@ export default function FlightMap() {
             });
           }
 
+          const omega = turnRateRef.current.get(selIcao) ?? 0;
           const pred = map.getSource("prediction") as GeoJSONSource | undefined;
           const ppath = sel.on_ground
             ? []
-            : predictPath(sel.longitude, sel.latitude, sel.velocity, sel.true_track);
+            : predictPath(sel.longitude, sel.latitude, sel.velocity, sel.true_track, omega);
           pred?.setData({
             type: "FeatureCollection",
             features:
@@ -760,6 +835,16 @@ export default function FlightMap() {
                 : [],
           });
 
+          // Turn indicator: ring on the plane while it's meaningfully turning.
+          const turning = !sel.on_ground && Math.abs(omega) >= 0.15;
+          const turnSrc = map.getSource("turn-marker") as GeoJSONSource | undefined;
+          turnSrc?.setData({
+            type: "FeatureCollection",
+            features: turning
+              ? [{ type: "Feature", geometry: { type: "Point", coordinates: head }, properties: {} }]
+              : [],
+          });
+
           popupRef.current?.setLngLat(head);
         };
         rafId = requestAnimationFrame(animate);
@@ -771,6 +856,7 @@ export default function FlightMap() {
             const next = await loadPlanes();
             setPlaneList(next);
             planesRef.current = next;
+            updateTurnRates(next);
             baseTimeRef.current = Date.now();
             // Keep the open sidebar in sync with the freshest data.
             setSelected((prev) =>
