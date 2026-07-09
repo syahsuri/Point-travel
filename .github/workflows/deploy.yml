@@ -20,9 +20,8 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-        with:
-          clean: false
       - run: |
+          cp /home/kill3rbyte/CICD/Point-travel/.env .env
           docker build -t next-app .
           docker stop next-web || true
           docker rm next-web || true
