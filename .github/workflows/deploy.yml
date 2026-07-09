@@ -1,0 +1,33 @@
+# .github/workflows/deploy.yml
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: node:20-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /path/to/your/app
+            git pull origin main
+            docker build -t next-app .
+            docker stop next-web || true
+            docker rm next-web || true
+            docker run -d --name next-web -p 3000:3000 next-app
