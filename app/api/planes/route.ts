@@ -1,4 +1,5 @@
 import type { StateVector } from "@/lib/types";
+import { fetchRetry } from "@/lib/fetchRetry";
 
 /**
  * Server-side proxy for the flight backend.
@@ -64,7 +65,7 @@ function toStateVector(r: RawState): StateVector | null {
 
 export async function GET() {
   try {
-    const res = await fetch(BACKEND_URL, {
+    const res = await fetchRetry(BACKEND_URL, {
       cache: "no-store",
       headers: AUTH_TOKEN ? { auth_token: AUTH_TOKEN } : undefined,
     });

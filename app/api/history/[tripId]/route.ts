@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import type { TripHistory } from "@/lib/types";
+import { fetchRetry } from "@/lib/fetchRetry";
 
 /**
  * Server-side proxy for a single trip's historical track.
@@ -56,7 +57,7 @@ export async function GET(
 ) {
   const { tripId } = await ctx.params;
   try {
-    const res = await fetch(
+    const res = await fetchRetry(
       `${BACKEND_ORIGIN}/historical/${encodeURIComponent(tripId)}`,
       {
         cache: "no-store",

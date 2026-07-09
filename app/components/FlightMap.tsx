@@ -52,13 +52,13 @@ function setBasemap(map: maplibregl.Map, mode: Basemap) {
 // data we care about) scoped small.
 const INDONESIA_BOUNDS: [number, number, number, number] = [94, -11, 141, 7];
 
-// Plane marker asset (public/icons/plane.svg). Aspect ~95:57.
-// icon-rotate uses `true_track` (deg clockwise from north). If the art's nose
-// does not point up at rest, adjust PLANE_ICON_ROTATE_OFFSET below.
+// Plane marker asset (public/icons/plane.svg — a side-profile Nyan Cat facing
+// RIGHT at rest). Aspect ~95:57. The art is a character, not a top-down plane,
+// so we keep it upright and flip it horizontally toward the travel direction
+// (see the `plane` / `plane-flip` images) rather than rotating the whole body.
 const PLANE_ICON_SRC = "/icons/plane.svg";
 const PLANE_ICON_W = 48;
 const PLANE_ICON_H = 29;
-const PLANE_ICON_ROTATE_OFFSET = 0; // e.g. -90 if art faces east at rest
 
 // One style holds all three basemaps. Raster (satellite/streets) layers start
 // hidden; MapLibre only fetches their tiles once made visible, so the default
@@ -194,11 +194,6 @@ function planesToGeoJSON(
       geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
       properties: {
         icao24: p.icao24,
-        label_name:
-          p.owner ||
-          p.operator_callsign ||
-          (p.callsign ?? "").trim() ||
-          p.icao24,
         callsign: (p.callsign ?? "").trim() || "N/A",
         track: p.true_track ?? 0,
         baro_altitude: p.baro_altitude,
@@ -288,6 +283,19 @@ function greatCircle(
   return pts;
 }
 
+// Great-circle distance between two [lon,lat] points, in meters (haversine).
+// Used for ETA (distance to destination / velocity).
+function haversineMeters(a: [number, number], b: [number, number]): number {
+  const R = 6371000;
+  const r = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * r;
+  const dLon = (b[0] - a[0]) * r;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
 // Project a point forward along a heading (dead reckoning) on a sphere.
 // Used to animate airborne planes between polls. Returns the input unchanged
 // when velocity/heading is unavailable. lon/lat in degrees, v in m/s.
@@ -357,9 +365,16 @@ export default function FlightMap() {
   // IATA -> [lon, lat], loaded once from /data/airports.json. Origin of a
   // trajectory line comes from here (backend gives only origin_iata, not coords).
   const airportsRef = useRef<Record<string, [number, number]>>({});
+  // State mirror of the airport lookup, for reads during render (ETA).
+  const [airports, setAirports] = useState<Record<string, [number, number]>>({});
   const [basemap, setBasemapState] = useState<Basemap>("streets");
   const [planeList, setPlaneList] = useState<StateVector[]>([]);
   const [listOpen, setListOpen] = useState(true);
+  // Free-text filter for the flights list.
+  const [query, setQuery] = useState("");
+  // Camera auto-follow of the selected plane. Ref mirrors state for the rAF loop.
+  const [follow, setFollow] = useState(false);
+  const followRef = useRef(false);
   // Currently selected plane -> drives the detail sidebar.
   const [selected, setSelected] = useState<StateVector | null>(null);
   // Actual flown track for the selection (fetched lazily on select).
@@ -376,8 +391,8 @@ export default function FlightMap() {
   // Flown/great-circle path BEHIND the plane (no live head point). The rAF loop
   // appends the current animated position so the line stays glued to the marker.
   const basePathRef = useRef<[number, number][]>([]);
-  // Floating label box above the selected plane.
-  const popupRef = useRef<maplibregl.Popup | null>(null);
+  // Animated Nyan Cat gif marker that replaces the static icon while selected.
+  const nyanMarkerRef = useRef<maplibregl.Marker | null>(null);
   // Per-icao24 last heading sample + its timestamp, to derive turn rate.
   const prevTrackRef = useRef<Map<string, { track: number; t: number }>>(new Map());
   // Per-icao24 turn rate in signed deg/s (derived by diffing headings).
@@ -446,30 +461,40 @@ export default function FlightMap() {
       : [];
     drawTrajectory(p.origin_iata, [p.longitude, p.latitude]);
 
-    // Floating label box above the marker (icao24 + airline name).
-    const name =
-      p.owner || p.operator_callsign || (p.callsign ?? "").trim() || p.icao24;
-    popupRef.current?.remove();
+    // Origin / destination airport pins (whichever resolve in the lookup).
+    const endpointFeats: GeoJSON.Feature<GeoJSON.Point>[] = [];
+    for (const iata of [p.origin_iata, p.destination_iata]) {
+      const coord = iata ? airportsRef.current[iata] : undefined;
+      if (coord) {
+        endpointFeats.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: coord },
+          properties: { iata },
+        });
+      }
+    }
+    (map?.getSource("endpoints") as GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: endpointFeats,
+    });
+
+    // Swap the static icon for an animated Nyan Cat gif while selected: hide
+    // this plane in the symbol layer and float an HTML gif marker in its place.
+    nyanMarkerRef.current?.remove();
     if (map) {
-      // Build with textContent (not setHTML) — name/icao24 are untrusted backend
-      // data; string-interpolated HTML would be an XSS sink.
-      const box = document.createElement("div");
-      const nameEl = document.createElement("div");
-      nameEl.textContent = name;
-      nameEl.style.cssText = "font-weight:600;color:#fff;white-space:nowrap";
-      const idEl = document.createElement("div");
-      idEl.textContent = p.icao24;
-      idEl.style.cssText = "opacity:.55;font-size:10px;letter-spacing:.05em";
-      box.append(nameEl, idEl);
-      popupRef.current = new maplibregl.Popup({
-        closeButton: false,
-        closeOnClick: false,
-        anchor: "bottom",
-        offset: 18,
-        className: "plane-popup",
-      })
+      if (map.getLayer("planes")) {
+        map.setFilter("planes", ["!=", ["get", "icao24"], p.icao24]);
+      }
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "pointer-events:none;line-height:0";
+      const gif = document.createElement("img");
+      gif.src = "/icons/nyan-cat.gif";
+      gif.alt = "";
+      // Faces right by default; flipped per-heading in the rAF loop.
+      gif.style.cssText = "height:64px;width:auto;display:block;image-rendering:pixelated";
+      wrap.appendChild(gif);
+      nyanMarkerRef.current = new maplibregl.Marker({ element: wrap, anchor: "center" })
         .setLngLat([p.longitude, p.latitude])
-        .setDOMContent(box)
         .addTo(map);
     }
 
@@ -498,8 +523,12 @@ export default function FlightMap() {
     historyTripRef.current = null;
     selectedIcaoRef.current = null;
     basePathRef.current = [];
-    popupRef.current?.remove();
-    popupRef.current = null;
+    nyanMarkerRef.current?.remove();
+    nyanMarkerRef.current = null;
+    // Restore the static icon for the deselected plane.
+    if (mapRef.current?.getLayer("planes")) {
+      mapRef.current.setFilter("planes", null);
+    }
     clearTrajectory();
     (mapRef.current?.getSource("prediction") as GeoJSONSource | undefined)?.setData(
       { type: "FeatureCollection", features: [] }
@@ -507,6 +536,11 @@ export default function FlightMap() {
     (mapRef.current?.getSource("turn-marker") as GeoJSONSource | undefined)?.setData(
       { type: "FeatureCollection", features: [] }
     );
+    (mapRef.current?.getSource("endpoints") as GeoJSONSource | undefined)?.setData(
+      { type: "FeatureCollection", features: [] }
+    );
+    setFollow(false);
+    followRef.current = false;
     mapRef.current?.setPaintProperty("trajectory-line", "line-dasharray", [2, 1.5]);
   }
 
@@ -540,6 +574,7 @@ export default function FlightMap() {
       .then((r) => (r.ok ? r.json() : {}))
       .then((j) => {
         airportsRef.current = j as Record<string, [number, number]>;
+        setAirports(airportsRef.current);
       })
       .catch((err) => console.error("[airports]", err));
 
@@ -578,6 +613,24 @@ export default function FlightMap() {
       img.onload = async () => {
         if (!map.hasImage("plane")) {
           map.addImage("plane", img, { pixelRatio: 2 });
+        }
+        // Horizontally-mirrored twin so the character can face LEFT when the
+        // plane is westbound (kept upright, never body-rotated). Rendered at 2x
+        // for crispness; added with matching pixelRatio so both images size the
+        // same. If the canvas can't be read, we just skip the flip variant.
+        if (!map.hasImage("plane-flip")) {
+          const c = document.createElement("canvas");
+          c.width = PLANE_ICON_W * 2;
+          c.height = PLANE_ICON_H * 2;
+          const ctx = c.getContext("2d");
+          if (ctx) {
+            ctx.translate(c.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            map.addImage("plane-flip", ctx.getImageData(0, 0, c.width, c.height), {
+              pixelRatio: 4,
+            });
+          }
         }
 
         let planes: StateVector[] = [];
@@ -709,6 +762,40 @@ export default function FlightMap() {
           },
         });
 
+        // Origin / destination airport pins for the selected flight.
+        map.addSource("endpoints", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "endpoint-dot",
+          type: "circle",
+          source: "endpoints",
+          paint: {
+            "circle-radius": 5,
+            "circle-color": "#ffffff",
+            "circle-stroke-color": "#0b1622",
+            "circle-stroke-width": 2,
+          },
+        });
+        map.addLayer({
+          id: "endpoint-label",
+          type: "symbol",
+          source: "endpoints",
+          layout: {
+            "text-field": ["get", "iata"],
+            "text-font": ["Noto Sans Bold"],
+            "text-size": 12,
+            "text-offset": [0, -1.1],
+            "text-anchor": "bottom",
+          },
+          paint: {
+            "text-color": "#ffffff",
+            "text-halo-color": "#0b1622",
+            "text-halo-width": 1.4,
+          },
+        });
+
         map.addSource("planes", {
           type: "geojson",
           data: planesToGeoJSON(planes),
@@ -719,20 +806,28 @@ export default function FlightMap() {
           type: "symbol",
           source: "planes",
           layout: {
-            "icon-image": "plane",
+            // Face the travel direction by flipping (not rotating): the mirrored
+            // `plane-flip` when westbound (track 180–360), else the right-facing
+            // `plane`. Keeps the character upright and natural.
+            "icon-image": [
+              "case",
+              ["all", [">=", ["get", "track"], 180], ["<", ["get", "track"], 360]],
+              "plane-flip",
+              "plane",
+            ],
             // Zoom-aware, clamped so the marker stays readable — never tiny far
             // out, never oversized zoomed in.
             "icon-size": [
               "interpolate",
               ["linear"],
               ["zoom"],
-              4, 0.35,
-              7, 0.55,
-              10, 0.8,
-              13, 1.0,
+              4, 0.5,
+              7, 0.8,
+              10, 1.1,
+              13, 1.4,
             ],
-            "icon-rotate": ["+", ["get", "track"], PLANE_ICON_ROTATE_OFFSET],
-            "icon-rotation-alignment": "map",
+            // Screen-upright; we convey heading by horizontal flip, not rotation.
+            "icon-rotation-alignment": "viewport",
             "icon-allow-overlap": true,
           },
         });
@@ -796,6 +891,9 @@ export default function FlightMap() {
           if (!sel) return;
           const head: [number, number] = [sel.longitude, sel.latitude];
 
+          // Auto-follow: keep the plane centered while the toggle is on.
+          if (followRef.current) map.setCenter(head);
+
           const traj = map.getSource("trajectory") as GeoJSONSource | undefined;
           const base = basePathRef.current;
           if (traj && base.length >= 1) {
@@ -845,7 +943,26 @@ export default function FlightMap() {
               : [],
           });
 
-          popupRef.current?.setLngLat(head);
+          // Nyan gif marker follows the plane and rotates so its head points
+          // along the heading. The art faces right (east); rotate by track-90.
+          // On the west half we rotate by track+90 and mirror horizontally so
+          // the cat points left-ward without ending up upside down.
+          const nyan = nyanMarkerRef.current;
+          if (nyan) {
+            nyan.setLngLat(head);
+            const gifEl = nyan.getElement().firstElementChild as HTMLElement | null;
+            if (gifEl) {
+              const h = sel.true_track;
+              if (typeof h === "number") {
+                gifEl.style.transform =
+                  h > 180 && h < 360
+                    ? `rotate(${h + 90}deg) scaleX(-1)`
+                    : `rotate(${h - 90}deg)`;
+              } else {
+                gifEl.style.transform = "none";
+              }
+            }
+          }
         };
         rafId = requestAnimationFrame(animate);
 
@@ -889,6 +1006,23 @@ export default function FlightMap() {
   // Label/value rows for the detail sidebar (nulls filtered out at render).
   const ft = (m: number | null) =>
     typeof m === "number" ? `${Math.round(m * 3.281).toLocaleString()} ft` : null;
+
+  // ETA to destination: great-circle distance to the dest airport / ground speed,
+  // shown as remaining time "1h 23m". Null if destination/speed unknown.
+  const eta = ((): string | null => {
+    const dest = selected?.destination_iata
+      ? airports[selected.destination_iata]
+      : undefined;
+    if (!selected || !dest || typeof selected.velocity !== "number" || selected.velocity <= 0) {
+      return null;
+    }
+    const secs = haversineMeters([selected.longitude, selected.latitude], dest) / selected.velocity;
+    if (!Number.isFinite(secs)) return null;
+    const h = Math.floor(secs / 3600);
+    const m = Math.round((secs % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  })();
+
   const detailRows: [string, string | null][] = selected
     ? [
         ["Status", selected.flight_status],
@@ -901,6 +1035,7 @@ export default function FlightMap() {
         ["To", selected.destination_iata],
         ["Dep (sched)", fmtSched(selected.scheduled_departure)],
         ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
+        ["ETA", eta],
         ["Altitude", ft(selected.baro_altitude)],
         [
           "Speed",
@@ -933,22 +1068,29 @@ export default function FlightMap() {
       ]
     : [];
 
+  // Flights-list filter: case-insensitive substring across the fields a user
+  // would search by. Empty query = everything.
+  const q = query.trim().toLowerCase();
+  const filteredPlanes = q
+    ? planeList.filter((p) =>
+        [
+          p.callsign,
+          p.owner,
+          p.operator_callsign,
+          p.origin_iata,
+          p.destination_iata,
+          p.icao24,
+        ]
+          .filter(Boolean)
+          .some((v) => (v as string).toLowerCase().includes(q))
+      )
+    : planeList;
+
   return (
     <div
       className="relative h-screen w-screen"
       style={{ position: "relative", height: "100dvh", width: "100vw" }}
     >
-      <style>{`
-        .plane-popup .maplibregl-popup-content {
-          background: rgba(0,0,0,0.75);
-          border: 1px solid rgba(255,255,255,0.12);
-          border-radius: 6px;
-          padding: 4px 8px;
-          backdrop-filter: blur(4px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        }
-        .plane-popup .maplibregl-popup-tip { display: none; }
-      `}</style>
       <div
         ref={containerRef}
         className="absolute inset-0"
@@ -978,12 +1120,25 @@ export default function FlightMap() {
           onClick={() => setListOpen((v) => !v)}
           className="flex items-center justify-between px-3 py-2 font-semibold text-white/90 hover:bg-white/5"
         >
-          <span>Flights ({planeList.length})</span>
+          <span>
+            Flights ({filteredPlanes.length}
+            {q && filteredPlanes.length !== planeList.length ? `/${planeList.length}` : ""})
+          </span>
           <span className="text-white/50">{listOpen ? "▾" : "▸"}</span>
         </button>
         {listOpen && (
-          <ul className="divide-y divide-white/5 overflow-y-auto">
-            {[...planeList]
+          <>
+            <div className="px-2 py-1.5">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search callsign / airline / route…"
+                className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 placeholder:text-white/35 focus:border-white/25 focus:outline-none"
+              />
+            </div>
+            <ul className="divide-y divide-white/5 overflow-y-auto">
+            {[...filteredPlanes]
               .sort((a, b) => {
                 if (a.on_ground !== b.on_ground) return a.on_ground ? 1 : -1;
                 return (a.callsign ?? "").localeCompare(b.callsign ?? "");
@@ -1034,7 +1189,8 @@ export default function FlightMap() {
                   </li>
                 );
               })}
-          </ul>
+            </ul>
+          </>
         )}
       </div>
 
@@ -1059,14 +1215,32 @@ export default function FlightMap() {
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              onClick={deselectPlane}
-              aria-label="Close"
-              className="shrink-0 rounded px-1.5 text-base leading-none text-white/60 hover:bg-white/10 hover:text-white"
-            >
-              ×
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const v = !follow;
+                  setFollow(v);
+                  followRef.current = v;
+                }}
+                aria-pressed={follow}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  follow
+                    ? "bg-sky-500/80 text-white"
+                    : "bg-white/10 text-white/70 hover:bg-white/20"
+                }`}
+              >
+                Follow
+              </button>
+              <button
+                type="button"
+                onClick={deselectPlane}
+                aria-label="Close"
+                className="rounded px-1.5 text-base leading-none text-white/60 hover:bg-white/10 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
           </div>
           <dl className="divide-y divide-white/5 overflow-y-auto">
             {detailRows
