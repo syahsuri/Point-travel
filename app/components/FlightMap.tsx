@@ -296,6 +296,27 @@ function haversineMeters(a: [number, number], b: [number, number]): number {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
+// Point at fraction `t` (0..1) along a polyline, measured by great-circle
+// segment length. Used by the flight-replay scrubber. Returns null if path empty.
+function pointAlong(path: [number, number][], t: number): [number, number] | null {
+  if (path.length === 0) return null;
+  if (path.length === 1) return path[0];
+  const segs = path.slice(1).map((p, i) => haversineMeters(path[i], p));
+  const total = segs.reduce((a, b) => a + b, 0);
+  if (total === 0) return path[0];
+  let target = Math.max(0, Math.min(1, t)) * total;
+  for (let i = 0; i < segs.length; i++) {
+    if (target <= segs[i] || i === segs.length - 1) {
+      const f = segs[i] === 0 ? 0 : target / segs[i];
+      const a = path[i];
+      const b = path[i + 1];
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    }
+    target -= segs[i];
+  }
+  return path[path.length - 1];
+}
+
 // Project a point forward along a heading (dead reckoning) on a sphere.
 // Used to animate airborne planes between polls. Returns the input unchanged
 // when velocity/heading is unavailable. lon/lat in degrees, v in m/s.
@@ -375,6 +396,16 @@ export default function FlightMap() {
   // Camera auto-follow of the selected plane. Ref mirrors state for the rAF loop.
   const [follow, setFollow] = useState(false);
   const followRef = useRef(false);
+  // Count of converging plane pairs flagged by the near-miss radar.
+  const [conflictCount, setConflictCount] = useState(0);
+  // Where we predicted the selected plane would be by the next poll, so the next
+  // poll can measure the forecast error. Plus the resulting error (km) for the HUD.
+  const predictedRef = useRef<{ icao: string; lon: number; lat: number } | null>(null);
+  const [accuracyKm, setAccuracyKm] = useState<number | null>(null);
+  // Flight-replay scrubber: position (0..1) along the selected trip's recorded
+  // path, and whether it's auto-playing.
+  const [replayT, setReplayT] = useState(0);
+  const [replaying, setReplaying] = useState(false);
   // Currently selected plane -> drives the detail sidebar.
   const [selected, setSelected] = useState<StateVector | null>(null);
   // Actual flown track for the selection (fetched lazily on select).
@@ -412,19 +443,15 @@ export default function FlightMap() {
     src?.setData({ type: "FeatureCollection", features: [] });
   }
 
-  // Render a path into the `trajectory` source: a line plus a dot at its start.
-  function setTrajectory(path: [number, number][], dashed: boolean) {
+  // Render a path into the `trajectory` source: the rainbow line plus a dot at
+  // its start.
+  function setTrajectory(path: [number, number][]) {
     const map = mapRef.current;
     const src = map?.getSource("trajectory") as GeoJSONSource | undefined;
     if (!map || !src || path.length < 2) {
       clearTrajectory();
       return;
     }
-    map.setPaintProperty(
-      "trajectory-line",
-      "line-dasharray",
-      dashed ? [2, 1.5] : [1]
-    );
     src.setData({
       type: "FeatureCollection",
       features: [
@@ -441,7 +468,7 @@ export default function FlightMap() {
       clearTrajectory();
       return;
     }
-    setTrajectory(greatCircle(origin, current), true);
+    setTrajectory(greatCircle(origin, current));
   }
 
   // Select a plane: open sidebar, draw the great-circle placeholder + fly to it,
@@ -452,6 +479,10 @@ export default function FlightMap() {
     setHistory(null);
     historyTripRef.current = p.trip_id;
     selectedIcaoRef.current = p.icao24;
+    predictedRef.current = null;
+    setAccuracyKm(null);
+    setReplaying(false);
+    setReplayT(0);
 
     // Base path behind the plane: great-circle placeholder from origin airport
     // to current pos (replaced by the real flown path once /api/history lands).
@@ -510,7 +541,7 @@ export default function FlightMap() {
         setHistory(h);
         if (h.path.length >= 2) {
           basePathRef.current = h.path;
-          setTrajectory(h.path, false);
+          setTrajectory(h.path);
         }
       })
       .catch((err) => console.error("[history]", err));
@@ -541,7 +572,10 @@ export default function FlightMap() {
     );
     setFollow(false);
     followRef.current = false;
-    mapRef.current?.setPaintProperty("trajectory-line", "line-dasharray", [2, 1.5]);
+    predictedRef.current = null;
+    setAccuracyKm(null);
+    setReplaying(false);
+    setReplayT(0);
   }
 
   // Derive each plane's turn rate (signed deg/s) by diffing its heading against
@@ -559,6 +593,63 @@ export default function FlightMap() {
       }
       prevTrackRef.current.set(p.icao24, { track: p.true_track, t });
     }
+  }
+
+  // Near-miss radar: flag airborne pairs whose 2-min forecasts pass within ~5nm
+  // horizontally AND ~600m vertically. Draws a red link between their current
+  // positions into the `conflicts` source and updates the count badge.
+  function drawConflicts(list: StateVector[]) {
+    const src = mapRef.current?.getSource("conflicts") as GeoJSONSource | undefined;
+    if (!src) return;
+    const air = list.filter(
+      (p) =>
+        !p.on_ground &&
+        typeof p.velocity === "number" &&
+        typeof p.true_track === "number"
+    );
+    const paths = air.map((p) => ({
+      p,
+      path: predictPath(
+        p.longitude,
+        p.latitude,
+        p.velocity,
+        p.true_track,
+        turnRateRef.current.get(p.icao24) ?? 0
+      ),
+    }));
+    const feats: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+    for (let i = 0; i < paths.length; i++) {
+      for (let j = i + 1; j < paths.length; j++) {
+        const A = paths[i];
+        const B = paths[j];
+        const altA = A.p.baro_altitude;
+        const altB = B.p.baro_altitude;
+        if (typeof altA === "number" && typeof altB === "number" && Math.abs(altA - altB) > 600) {
+          continue;
+        }
+        const n = Math.min(A.path.length, B.path.length);
+        let min = Infinity;
+        for (let k = 0; k < n; k++) {
+          const d = haversineMeters(A.path[k], B.path[k]);
+          if (d < min) min = d;
+        }
+        if (min < 9260) {
+          feats.push({
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [A.p.longitude, A.p.latitude],
+                [B.p.longitude, B.p.latitude],
+              ],
+            },
+            properties: {},
+          });
+        }
+      }
+    }
+    src.setData({ type: "FeatureCollection", features: feats });
+    setConflictCount(feats.length);
   }
 
   useEffect(() => {
@@ -649,9 +740,10 @@ export default function FlightMap() {
         // top). One source holds the line + an origin dot; filters split them.
         map.addSource("trajectory", {
           type: "geojson",
+          lineMetrics: true, // needed for the rainbow line-gradient
           data: { type: "FeatureCollection", features: [] },
         });
-        // Neon: wide blurred halo under a thin bright core.
+        // Soft white glow halo under the rainbow trail.
         map.addLayer({
           id: "trajectory-glow",
           type: "line",
@@ -659,12 +751,13 @@ export default function FlightMap() {
           filter: ["==", ["geometry-type"], "LineString"],
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": "#22d3ee",
+            "line-color": "#ffffff",
             "line-width": 9,
             "line-blur": 8,
-            "line-opacity": 0.45,
+            "line-opacity": 0.3,
           },
         });
+        // The flown path IS the Nyan rainbow — gradient sweep along the trail.
         map.addLayer({
           id: "trajectory-line",
           type: "line",
@@ -672,10 +765,19 @@ export default function FlightMap() {
           filter: ["==", ["geometry-type"], "LineString"],
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": "#a5f3fc",
-            "line-width": 2.5,
-            "line-dasharray": [2, 1.5],
+            "line-width": 4,
             "line-opacity": 1,
+            "line-gradient": [
+              "interpolate",
+              ["linear"],
+              ["line-progress"],
+              0.0, "#ff2b2b",
+              0.2, "#ff9500",
+              0.4, "#ffe600",
+              0.6, "#33dd33",
+              0.8, "#00a3ff",
+              1.0, "#8a2be2",
+            ],
           },
         });
         // Neon start dot: glow halo + bright core.
@@ -796,6 +898,56 @@ export default function FlightMap() {
           },
         });
 
+        // Near-miss radar: red links between pairs of planes whose 2-min
+        // forecasts converge (pulsed in the rAF loop).
+        map.addSource("conflicts", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "conflict-glow",
+          type: "line",
+          source: "conflicts",
+          layout: { "line-cap": "round" },
+          paint: { "line-color": "#ff3b3b", "line-width": 8, "line-blur": 8, "line-opacity": 0.4 },
+        });
+        map.addLayer({
+          id: "conflict-line",
+          type: "line",
+          source: "conflicts",
+          layout: { "line-cap": "round" },
+          paint: {
+            "line-color": "#ff5555",
+            "line-width": 2,
+            "line-dasharray": [1, 1],
+            "line-opacity": 0.9,
+          },
+        });
+        drawConflicts(planes);
+
+        // Flight-replay head: a marker scrubbed along the selected trip's path.
+        map.addSource("replay", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: "replay-glow",
+          type: "circle",
+          source: "replay",
+          paint: { "circle-radius": 12, "circle-color": "#ffffff", "circle-blur": 1, "circle-opacity": 0.4 },
+        });
+        map.addLayer({
+          id: "replay-dot",
+          type: "circle",
+          source: "replay",
+          paint: {
+            "circle-radius": 6,
+            "circle-color": "#ffffff",
+            "circle-stroke-color": "#8a2be2",
+            "circle-stroke-width": 2,
+          },
+        });
+
         map.addSource("planes", {
           type: "geojson",
           data: planesToGeoJSON(planes),
@@ -882,6 +1034,13 @@ export default function FlightMap() {
             return { ...p, longitude: lng, latitude: lat };
           });
           src.setData(planesToGeoJSON(moved));
+
+          // Pulse the near-miss links (opacity breathes) so they read as alerts.
+          if (map.getLayer("conflict-line")) {
+            const pulse = 0.55 + 0.45 * Math.sin(now / 300);
+            map.setPaintProperty("conflict-line", "line-opacity", pulse);
+            map.setPaintProperty("conflict-glow", "line-opacity", 0.25 + 0.25 * pulse);
+          }
 
           // Keep the selected plane's trajectory head, prediction, and label
           // glued to its live animated position (no lag behind the marker).
@@ -974,7 +1133,38 @@ export default function FlightMap() {
             setPlaneList(next);
             planesRef.current = next;
             updateTurnRates(next);
+            drawConflicts(next);
             baseTimeRef.current = Date.now();
+
+            // Prediction accuracy: score last poll's forecast for the selected
+            // plane against its actual new position, then forecast the next poll.
+            const selIcao = selectedIcaoRef.current;
+            const actual = selIcao ? next.find((p) => p.icao24 === selIcao) : undefined;
+            if (actual) {
+              const pr = predictedRef.current;
+              if (pr && pr.icao === selIcao) {
+                setAccuracyKm(
+                  haversineMeters([actual.longitude, actual.latitude], [pr.lon, pr.lat]) / 1000
+                );
+              }
+              if (typeof actual.velocity === "number" && typeof actual.true_track === "number") {
+                const omega = turnRateRef.current.get(selIcao!) ?? 0;
+                const pth = predictPath(
+                  actual.longitude,
+                  actual.latitude,
+                  actual.velocity,
+                  actual.true_track,
+                  omega,
+                  POLL_MS / 1000,
+                  10
+                );
+                const end = pth[pth.length - 1];
+                predictedRef.current = { icao: selIcao!, lon: end[0], lat: end[1] };
+              } else {
+                predictedRef.current = null;
+              }
+            }
+
             // Keep the open sidebar in sync with the freshest data.
             setSelected((prev) =>
               prev ? next.find((p) => p.icao24 === prev.icao24) ?? prev : null
@@ -996,6 +1186,37 @@ export default function FlightMap() {
     // Map is created once; select/deselect read only stable refs + setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Draw the replay head at the current scrub position along the selected trip's
+  // recorded path (empty when there's no path).
+  useEffect(() => {
+    const src = mapRef.current?.getSource("replay") as GeoJSONSource | undefined;
+    if (!src) return;
+    const path = history?.path;
+    const pt = path && path.length >= 2 ? pointAlong(path, replayT) : null;
+    src.setData({
+      type: "FeatureCollection",
+      features: pt
+        ? [{ type: "Feature", geometry: { type: "Point", coordinates: pt }, properties: {} }]
+        : [],
+    });
+  }, [replayT, history]);
+
+  // Auto-play the replay: advance the scrubber ~5s end-to-end, stop at the end.
+  useEffect(() => {
+    if (!replaying) return;
+    const id = setInterval(() => {
+      setReplayT((t) => {
+        const nt = t + 0.02;
+        if (nt >= 1) {
+          setReplaying(false);
+          return 1;
+        }
+        return nt;
+      });
+    }, 100);
+    return () => clearInterval(id);
+  }, [replaying]);
 
   const modes: { id: Basemap; label: string }[] = [
     { id: "streets", label: "Streets" },
@@ -1036,6 +1257,7 @@ export default function FlightMap() {
         ["Dep (sched)", fmtSched(selected.scheduled_departure)],
         ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
         ["ETA", eta],
+        ["Forecast err", accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null],
         ["Altitude", ft(selected.baro_altitude)],
         [
           "Speed",
@@ -1096,6 +1318,11 @@ export default function FlightMap() {
         className="absolute inset-0"
         style={{ position: "absolute", inset: 0 }}
       />
+      {conflictCount > 0 && (
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border border-red-400/40 bg-red-950/70 px-3 py-1 text-xs font-semibold text-red-200 backdrop-blur">
+          ⚠ {conflictCount} near-miss {conflictCount === 1 ? "pair" : "pairs"}
+        </div>
+      )}
       <div className="absolute left-4 top-4 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
         {modes.map((m) => (
           <button
@@ -1242,6 +1469,32 @@ export default function FlightMap() {
               </button>
             </div>
           </div>
+          {history && history.path.length >= 2 && (
+            <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (replayT >= 1) setReplayT(0);
+                  setReplaying((v) => !v);
+                }}
+                className="shrink-0 rounded bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/80 hover:bg-white/20"
+              >
+                {replaying ? "⏸" : "▶"} Replay
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.001}
+                value={replayT}
+                onChange={(e) => {
+                  setReplaying(false);
+                  setReplayT(Number(e.target.value));
+                }}
+                className="h-1 w-full cursor-pointer accent-fuchsia-500"
+              />
+            </div>
+          )}
           <dl className="divide-y divide-white/5 overflow-y-auto">
             {detailRows
               .filter(([, v]) => v)
