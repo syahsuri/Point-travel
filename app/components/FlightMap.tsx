@@ -552,6 +552,20 @@ export default function FlightMap() {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
         });
+        // Neon: wide blurred halo under a thin bright core.
+        map.addLayer({
+          id: "trajectory-glow",
+          type: "line",
+          source: "trajectory",
+          filter: ["==", ["geometry-type"], "LineString"],
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#22d3ee",
+            "line-width": 9,
+            "line-blur": 8,
+            "line-opacity": 0.45,
+          },
+        });
         map.addLayer({
           id: "trajectory-line",
           type: "line",
@@ -559,10 +573,23 @@ export default function FlightMap() {
           filter: ["==", ["geometry-type"], "LineString"],
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": "#38bdf8",
-            "line-width": 2,
+            "line-color": "#a5f3fc",
+            "line-width": 2.5,
             "line-dasharray": [2, 1.5],
-            "line-opacity": 0.9,
+            "line-opacity": 1,
+          },
+        });
+        // Neon start dot: glow halo + bright core.
+        map.addLayer({
+          id: "origin-glow",
+          type: "circle",
+          source: "trajectory",
+          filter: ["==", ["geometry-type"], "Point"],
+          paint: {
+            "circle-radius": 11,
+            "circle-color": "#22d3ee",
+            "circle-blur": 1,
+            "circle-opacity": 0.5,
           },
         });
         map.addLayer({
@@ -571,8 +598,8 @@ export default function FlightMap() {
           source: "trajectory",
           filter: ["==", ["geometry-type"], "Point"],
           paint: {
-            "circle-radius": 4,
-            "circle-color": "#38bdf8",
+            "circle-radius": 4.5,
+            "circle-color": "#e0fbff",
             "circle-stroke-color": "#0b1622",
             "circle-stroke-width": 1.5,
           },
@@ -584,15 +611,27 @@ export default function FlightMap() {
           data: { type: "FeatureCollection", features: [] },
         });
         map.addLayer({
-          id: "prediction-line",
+          id: "prediction-glow",
           type: "line",
           source: "prediction",
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
             "line-color": "#facc15",
+            "line-width": 7,
+            "line-blur": 7,
+            "line-opacity": 0.4,
+          },
+        });
+        map.addLayer({
+          id: "prediction-line",
+          type: "line",
+          source: "prediction",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#fde047",
             "line-width": 2,
             "line-dasharray": [0.4, 2],
-            "line-opacity": 0.9,
+            "line-opacity": 1,
           },
         });
 
