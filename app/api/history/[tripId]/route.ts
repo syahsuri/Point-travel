@@ -15,6 +15,8 @@ const BACKEND_ORIGIN = (
   process.env.FLIGHTS_API_URL ?? "https://flights.gukgukcraft.id/flights"
 ).replace(/\/flights\/?$/, "");
 
+const AUTH_TOKEN = process.env.FLIGHTS_AUTH_TOKEN ?? "";
+
 type RawPoint = { lat?: unknown; lon?: unknown };
 type RawTrip = Partial<TripHistory> &
   Record<string, unknown> & { path_points?: RawPoint[] };
@@ -56,7 +58,10 @@ export async function GET(
   try {
     const res = await fetch(
       `${BACKEND_ORIGIN}/historical/${encodeURIComponent(tripId)}`,
-      { cache: "no-store" }
+      {
+        cache: "no-store",
+        headers: AUTH_TOKEN ? { auth_token: AUTH_TOKEN } : undefined,
+      }
     );
     if (!res.ok) throw new Error(`backend ${res.status}`);
 

@@ -13,6 +13,8 @@ export const dynamic = "force-dynamic";
 const BACKEND_URL =
   process.env.FLIGHTS_API_URL ?? "https://flights.gukgukcraft.id/flights";
 
+const AUTH_TOKEN = process.env.FLIGHTS_AUTH_TOKEN ?? "";
+
 // The backend returns a bare array; tolerate a { states } envelope too.
 type RawState = Partial<StateVector> & Record<string, unknown>;
 
@@ -62,7 +64,10 @@ function toStateVector(r: RawState): StateVector | null {
 
 export async function GET() {
   try {
-    const res = await fetch(BACKEND_URL, { cache: "no-store" });
+    const res = await fetch(BACKEND_URL, {
+      cache: "no-store",
+      headers: AUTH_TOKEN ? { auth_token: AUTH_TOKEN } : undefined,
+    });
     if (!res.ok) throw new Error(`backend ${res.status}`);
 
     const raw = (await res.json()) as unknown;
