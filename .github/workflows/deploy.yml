@@ -24,4 +24,4 @@ jobs:
           docker build -t next-app .
           docker stop next-web || true
           docker rm next-web || true
-          docker run -d --name next-web -p 3000:3000 next-app
+          docker run -d --name next-web -p 40000:3000 next-app
