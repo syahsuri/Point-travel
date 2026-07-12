@@ -53,6 +53,12 @@ function setBasemap(map: maplibregl.Map, mode: Basemap) {
 // data we care about) scoped small.
 const INDONESIA_BOUNDS: [number, number, number, number] = [94, -11, 141, 7];
 
+const KONAMI_CODE = [
+  "ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown",
+  "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight",
+  "b", "a",
+];
+
 // Plane marker asset (public/icons/plane.svg — a side-profile Nyan Cat facing
 // RIGHT at rest). Aspect ~95:57. The art is a character, not a top-down plane,
 // so we keep it upright and flip it horizontally toward the travel direction
@@ -446,6 +452,9 @@ export default function FlightMap() {
   // arrives. Drives the dimmed/dashed "loading" style on the trajectory line.
   const trajectoryLoadingRef = useRef(false);
 
+  const [chaosMode, setChaosMode] = useState(false);
+  const konamiIndexRef = useRef(0);
+
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
     const map = mapRef.current;
@@ -836,6 +845,7 @@ export default function FlightMap() {
         await Promise.all([
           loadIcon("/icons/airport-unselected.png", "airport-unselected"),
           loadIcon("/icons/airport.png", "airport-selected"),
+          loadIcon("/icons/nyan-cat.gif", "plane-chaos")
         ]);
 
         let planes: StateVector[] = [];
@@ -1518,6 +1528,58 @@ export default function FlightMap() {
     return () => clearInterval(id);
   }, [replaying]);
 
+   useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const expected = KONAMI_CODE[konamiIndexRef.current];
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (key === expected) {
+        konamiIndexRef.current += 1;
+        if (konamiIndexRef.current === KONAMI_CODE.length) {
+          konamiIndexRef.current = 0;
+          setChaosMode(true);
+          setTimeout(() => setChaosMode(false), 10_000);
+        }
+      } else {
+        konamiIndexRef.current = key === KONAMI_CODE[0] ? 1 : 0;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // Chaos mode visuals: bigger pulsing planes + rainbow-cycled airport icons.
+ // Chaos mode visuals: bigger pulsing planes + nyan-cat icon swap.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!map.getLayer("planes")) return;
+
+    if (!chaosMode) {
+      map.setLayoutProperty("planes", "icon-size", [
+        "interpolate", ["linear"], ["zoom"],
+        4, 0.6, 7, 0.9, 10, 1.2, 13, 1.5,
+      ]);
+      map.setLayoutProperty("planes", "icon-image", "plane");
+      return;
+    }
+
+    map.setLayoutProperty("planes", "icon-image", "plane-chaos");
+
+    let raf: number;
+    const start = performance.now();
+    const tick = () => {
+      const t = (performance.now() - start) / 1000;
+      const pulse = 0.5 + 0.10 * Math.sin(t * 6);
+      map.setLayoutProperty("planes", "icon-size", [
+        "interpolate", ["linear"], ["zoom"],
+        4, 0.6 * pulse, 7, 0.9 * pulse, 10, 1.2 * pulse, 13, 1.5 * pulse,
+      ]);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [chaosMode]);
+
   const modes: { id: Basemap; label: string }[] = [
     { id: "streets", label: "Streets" },
     { id: "dark", label: "Dark" },
@@ -1652,6 +1714,38 @@ export default function FlightMap() {
         className="absolute inset-0"
         style={{ position: "absolute", inset: 0 }}
       />
+
+      {chaosMode && (
+        <>
+          <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+            <div className="chaos-starfield" />
+          </div>
+          <div className="pointer-events-none absolute inset-0 disco-overlay" style={{ zIndex: 15 }} />
+          <div className="pointer-events-none absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-fuchsia-300/50 bg-black/70 px-4 py-1.5 backdrop-blur">
+            <img
+              src="/icons/nyan-cat.gif"
+              alt=""
+              className="h-6 w-6 shrink-0"
+            />
+            <span
+              className="text-xs font-bold tracking-wide text-transparent"
+              style={{
+                backgroundImage:
+                  "linear-gradient(90deg, #ff2b2b, #ff9500, #ffe600, #33dd33, #00a3ff, #8a2be2)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+              }}
+            >
+              CHAOS MODE ACTIVATED
+            </span>
+            <img
+              src="/icons/nyan-cat.gif"
+              alt=""
+              className="h-6 w-6 shrink-0 -scale-x-100"
+            />
+          </div>
+        </>
+      )}
       {conflictCount > 0 && (
         <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border border-red-400/40 bg-red-950/70 px-3 py-1 text-xs font-semibold text-red-200 backdrop-blur">
           ⚠ {conflictCount} near-miss {conflictCount === 1 ? "pair" : "pairs"}

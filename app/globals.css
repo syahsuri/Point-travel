@@ -47,3 +47,41 @@ body {
   color: #8fb3cc;
   font-size: 16px;
 }
+
+.chaos-starfield {
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, #fff, transparent),
+    radial-gradient(2px 2px at 60% 70%, #fff, transparent),
+    radial-gradient(1px 1px at 80% 10%, #fff, transparent),
+    radial-gradient(1px 1px at 30% 80%, #fff, transparent),
+    radial-gradient(2px 2px at 90% 40%, #fff, transparent);
+  background-size: 200px 200px;
+  opacity: 0.5;
+  animation: chaos-drift 3s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes chaos-drift {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-200px, -200px); }
+}
+
+.disco-overlay {
+  mix-blend-mode: color;
+  animation: disco-cycle 1.5s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes disco-cycle {
+  0%   { background-color: #ff2b2b; }
+  17%  { background-color: #ff9500; }
+  33%  { background-color: #ffe600; }
+  50%  { background-color: #33dd33; }
+  67%  { background-color: #00a3ff; }
+  83%  { background-color: #8a2be2; }
+  100% { background-color: #ff2b2b; }
+}
