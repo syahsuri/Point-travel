@@ -14,3 +14,7 @@ grew.
 - [0003-place-labels.md](./0003-place-labels.md) — country / province / city labels on the Dark map.
 - [0004-live-data.md](./0004-live-data.md) — live backend data via /api/planes proxy + 2-min polling.
 - [0005-flights-list-and-streets-default.md](./0005-flights-list-and-streets-default.md) — floating flights list, custom plane icon, Streets default.
+- [0006-custom-plane-markers.md](./0006-custom-plane-markers.md) — custom plane-white and plane.png markers with heading rotation.
+- [0007-swapped-plane-marker-roles.md](./0007-swapped-plane-marker-roles.md) — swapped blue and white marker roles & added black border to blue icon.
+- [0008-destination-dotted-line.md](./0008-destination-dotted-line.md) — green dotted trajectory line from selected plane to destination.
+- [0009-flights-list-sorting.md](./0009-flights-list-sorting.md) — sorting toggle (Asc/Desc) for flights list by update time.

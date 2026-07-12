@@ -66,6 +66,27 @@ export interface StateVector {
   flight_status: string | null;
 }
 
+/**
+ * A single airport entry from the backend's `/airports` endpoint.
+ * Matches the shape returned by https://flights.gukgukcraft.id/airports.
+ */
+export interface Airport {
+  /** IATA airport code, e.g. "CGK". Null when not assigned. */
+  iata_code: string | null;
+  /** ICAO airport code, e.g. "WIII". Null when not assigned. */
+  icao_code: string | null;
+  /** Full airport name. */
+  name: string;
+  /** WGS-84 latitude in degrees. */
+  latitude_deg: number;
+  /** WGS-84 longitude in degrees. */
+  longitude_deg: number;
+  /** ISO 3166-1 alpha-2 country code, e.g. "ID". */
+  iso_country: string;
+  /** Airport size classification, e.g. "large_airport", "medium_airport", "small_airport". */
+  type: string;
+}
+
 /** A batch of plane states, matching OpenSky's `/states/all` envelope. */
 export interface StatesResponse {
   /** Unix seconds the batch was sampled. */
