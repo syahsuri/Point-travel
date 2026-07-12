@@ -1,0 +1,29 @@
+# .github/workflows/deploy.yml
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: node:20-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  deploy:
+    needs: check
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cp /DATA/CICD/Point-travel/.env .env
+          docker build -t next-app .
+          docker stop next-web || true
+          docker rm next-web || true
+          docker run -d --name next-web --restart unless-stopped --env-file .env -p 40000:3000 next-app
+          docker image prune -f
