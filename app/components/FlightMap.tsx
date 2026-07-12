@@ -401,6 +401,8 @@ export default function FlightMap() {
   // search panel airports
   const [panelTab, setPanelTab] = useState<"flights" | "airports">("flights");
   const [airportQuery, setAirportQuery] = useState("");
+  const [showPlanes, setShowPlanes] = useState(true);
+  const [showAirports, setShowAirports] = useState(true);
   // Free-text filter for the flights list.
   const [query, setQuery] = useState("");
   const [sortDesc, setSortDesc] = useState(true);
@@ -440,11 +442,44 @@ export default function FlightMap() {
   const prevTrackRef = useRef<Map<string, { track: number; t: number }>>(new Map());
   // Per-icao24 turn rate in signed deg/s (derived by diffing headings).
   const turnRateRef = useRef<Map<string, number>>(new Map());
+  // True while showing the great-circle placeholder, before real history
+  // arrives. Drives the dimmed/dashed "loading" style on the trajectory line.
+  const trajectoryLoadingRef = useRef(false);
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
     const map = mapRef.current;
     if (map) setBasemap(map, mode);
+  }
+  function togglePlanes() {
+    const next = !showPlanes;
+    setShowPlanes(next);
+    const map = mapRef.current;
+    if (!map) return;
+    for (const id of ["planes"]) {
+      if (map.getLayer(id)) {
+        map.setLayoutProperty(id, "visibility", next ? "visible" : "none");
+      }
+    }
+    // Hide the floating selected-plane marker + trajectory too, so toggling
+    // off truly clears all plane-related visuals.
+    if (!next) {
+      selectedMarkerRef.current?.getElement().style.setProperty("display", "none");
+    } else {
+      selectedMarkerRef.current?.getElement().style.removeProperty("display");
+    }
+  }
+
+  function toggleAirports() {
+    const next = !showAirports;
+    setShowAirports(next);
+    const map = mapRef.current;
+    if (!map) return;
+    for (const id of ["airport-dot", "airport-label", "selected-airport-icon"]) {
+      if (map.getLayer(id)) {
+        map.setLayoutProperty(id, "visibility", next ? "visible" : "none");
+      }
+    }
   }
 
   // Clear any drawn trajectory (deselect).
@@ -471,6 +506,19 @@ export default function FlightMap() {
         { type: "Feature", geometry: { type: "Point", coordinates: path[0] }, properties: {} },
       ],
     });
+  }
+
+   function setTrajectoryLoading(loading: boolean) {
+    trajectoryLoadingRef.current = loading;
+    const map = mapRef.current;
+    if (!map || !map.getLayer("trajectory-line")) return;
+    map.setPaintProperty("trajectory-line", "line-opacity", loading ? 0.35 : 1);
+    map.setPaintProperty(
+      "trajectory-line",
+      "line-dasharray",
+      loading ? [0.6, 1.4] : undefined
+    );
+    map.setPaintProperty("trajectory-glow", "line-opacity", loading ? 0.12 : 0.3);
   }
 
   // Great-circle placeholder from the origin airport to the current position.
@@ -505,6 +553,7 @@ export default function FlightMap() {
       ? greatCircle(origin, [p.longitude, p.latitude])
       : [];
     drawTrajectory(p.origin_iata, [p.longitude, p.latitude]);
+    setTrajectoryLoading(true);
 
     // Origin / destination airport pins (whichever resolve in the lookup).
     const endpointFeats: GeoJSON.Feature<GeoJSON.Point>[] = [];
@@ -569,7 +618,10 @@ export default function FlightMap() {
       center: [p.longitude, p.latitude],
       zoom: Math.max(map.getZoom(), 7),
     });
-    if (!p.trip_id) return;
+    if (!p.trip_id) {
+      setTrajectoryLoading(false);
+      return;
+    }
     loadHistory(p.trip_id)
       .then((h) => {
         // Ignore if the user has since selected another plane.
@@ -579,8 +631,12 @@ export default function FlightMap() {
           basePathRef.current = h.path;
           setTrajectory(h.path);
         }
+        setTrajectoryLoading(false);
       })
-      .catch((err) => console.error("[history]", err));
+      .catch((err) => {
+        console.error("[history]", err);
+        setTrajectoryLoading(false);
+      });
   }
 
   // Deselect: close sidebar + clear trajectory, reset line style for next pick.
@@ -590,6 +646,7 @@ export default function FlightMap() {
     historyTripRef.current = null;
     selectedIcaoRef.current = null;
     basePathRef.current = [];
+    setTrajectoryLoading(false);
     selectedMarkerRef.current?.remove();
     selectedMarkerRef.current = null;
     // Restore the static icon for the deselected plane.
@@ -1487,6 +1544,25 @@ export default function FlightMap() {
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   })();
 
+  // Flight progress: % of great-circle distance traveled from origin to
+  // current position, out of total origin→destination distance.
+  const progress = ((): { pct: number; traveledKm: number; remainingKm: number } | null => {
+    if (!selected) return null;
+    const origin = selected.origin_iata ? airports[selected.origin_iata] : undefined;
+    const dest = selected.destination_iata ? airports[selected.destination_iata] : undefined;
+    if (!origin || !dest) return null;
+    const current: [number, number] = [selected.longitude, selected.latitude];
+    const total = haversineMeters(origin, dest);
+    if (total === 0) return null;
+    const traveled = haversineMeters(origin, current);
+    const remaining = haversineMeters(current, dest);
+    return {
+      pct: Math.min(100, Math.max(0, (traveled / total) * 100)),
+      traveledKm: traveled / 1000,
+      remainingKm: remaining / 1000,
+    };
+  })();
+
   const flightDetailRows: [string, string | null][] = selected
     ? [
         ["Status", selected.flight_status],
@@ -1521,8 +1597,7 @@ export default function FlightMap() {
         ],
         ["Trip start", history ? fmtSched(history.trip_start_time) : null],
         ["Trip end", history ? fmtSched(history.trip_end_time) : null],
-        ["Completed", history ? (history.is_completed ? "yes" : "no") : null],
-        ["Trip ID", selected.trip_id],
+
       ]
     : [];
 
@@ -1597,7 +1672,27 @@ export default function FlightMap() {
             {m.label}
           </button>
         ))}
+
+        <button
+          type="button"
+          onClick={togglePlanes}
+          className={`px-3 py-1.5 transition-colors ${
+            showPlanes ? "bg-white/90 text-black" : "text-white/80 hover:bg-white/10"
+          }`}
+        >
+          ✈ 
+        </button>
+        <button
+          type="button"
+          onClick={toggleAirports}
+          className={`px-3 py-1.5 transition-colors ${
+            showAirports ? "bg-white/90 text-black" : "text-white/80 hover:bg-white/10"
+          }`}
+        >
+          🏢 
+        </button>
       </div>
+      
 
       {/* Floating list of planes currently on the map. */}
      {/* Floating list of planes/airports currently on the map. */}
@@ -1720,10 +1815,10 @@ export default function FlightMap() {
                 type="text"
                 value={airportQuery}
                 onChange={(e) => setAirportQuery(e.target.value)}
-                placeholder="Search name / IATA / ICAO / country…"
+                placeholder="Search names …"
                 className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 placeholder:text-white/35 focus:border-white/25 focus:outline-none"
               />
-            </div>
+            </div>    
             <ul className="divide-y divide-white/5 overflow-y-auto">
               {filteredAirports.map((a, i) => (
                     <li key={`${a.icao_code ?? a.iata_code ?? a.name}-${a.latitude_deg}-${a.longitude_deg}-${i}`}>                  <button
@@ -1826,6 +1921,56 @@ export default function FlightMap() {
               Aircraft
             </button>
           </div>
+          
+          {/* ↓ ADD THIS CARD ↓ */}
+          {sidebarTab === "flight" && (
+            <div className="border-b border-white/10 bg-black/20 px-3 py-3 shrink-0">
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-bold text-white">
+                  {selected.origin_iata ?? "???"}
+                </span>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-sm text-black">
+                  ✈
+                </span>
+                <span className="text-lg font-bold text-white">
+                  {selected.destination_iata ?? "???"}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-[10px] text-white/50">
+                <span>Sched {fmtSched(selected.scheduled_departure) ?? "—"}</span>
+                <span>Sched {fmtSched(selected.scheduled_arrival) ?? "—"}</span>
+              </div>
+              {progress && (
+                <>
+                  <div className="relative mt-3 h-1 rounded-full bg-white/10">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-amber-400"
+                      style={{ width: `${progress.pct}%` }}
+                    />
+                    <span
+                      className="absolute -top-[7px] -translate-x-1/2 text-[13px]"
+                      style={{ left: `${progress.pct}%` }}
+                    >
+                      ✈
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex justify-between text-[10px] text-white/45">
+                    <span>
+                      {Math.round(progress.traveledKm).toLocaleString()} km
+                      {timeAgo(selected.last_time_position)
+                        ? ` · ${timeAgo(selected.last_time_position)}`
+                        : ""}
+                    </span>
+                    <span>
+                      {Math.round(progress.remainingKm).toLocaleString()} km
+                      {eta ? ` · in ${eta}` : ""}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {sidebarTab === "aircraft" && (
             <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
               <div className="relative aspect-video w-full overflow-hidden rounded border border-white/10 bg-black/40">
@@ -1937,8 +2082,6 @@ export default function FlightMap() {
               ["Type",    selectedAirport.type
                 ? selectedAirport.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
                 : null],
-              ["Latitude",  selectedAirport.latitude_deg.toFixed(5)],
-              ["Longitude", selectedAirport.longitude_deg.toFixed(5)],
             ] as [string, string | null][])
               .filter(([, v]) => v)
               .map(([label, value]) => (
