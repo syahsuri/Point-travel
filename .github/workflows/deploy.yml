@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           cp /DATA/CICD/Point-travel/.env .env
-          docker build -t next-app .
+          DOCKER_CONFIG=/DATA/CICD/Point-travel docker build -t next-app .
           docker stop next-web || true
           docker rm next-web || true
           docker run -d --name next-web --restart unless-stopped --env-file .env -p 40000:3000 next-app
