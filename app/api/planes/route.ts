@@ -121,7 +121,7 @@ export async function GET() {
 
     return Response.json(
       { time, states },
-      { headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=120" } }
+      { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" } }
     );
   } catch (err) {
     console.error("[/api/planes]", err);

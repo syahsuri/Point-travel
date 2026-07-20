@@ -13,11 +13,10 @@ import type { StateVector, StatesResponse } from "./types";
  */
 const PLANES_SOURCE = "/api/planes";
 
-export async function loadPlanes(): Promise<StateVector[]> {
+export async function loadPlanes(): Promise<StatesResponse> {
   const res = await fetch(PLANES_SOURCE, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`loadPlanes: failed to fetch ${PLANES_SOURCE} (${res.status})`);
   }
-  const data = (await res.json()) as StatesResponse;
-  return data.states;
+  return (await res.json()) as StatesResponse;
 }

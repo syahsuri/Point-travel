@@ -307,7 +307,7 @@ function greatCircle(
     Math.asin(
       Math.sqrt(
         Math.sin((lat2 - lat1) / 2) ** 2 +
-          Math.cos(lat1) * Math.cos(lat2) * Math.sin((lon2 - lon1) / 2) ** 2
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin((lon2 - lon1) / 2) ** 2
       )
     );
   if (d === 0) return [a, b];
@@ -334,6 +334,25 @@ function greatCircle(
   return pts;
 }
 
+function smoothPath(
+  path: [number, number][],
+  iterations = 2
+): [number, number][] {
+  if (path.length < 3) return path;
+  let pts = path;
+  for (let iter = 0; iter < iterations; iter++) {
+    const next: [number, number][] = [pts[0]]; // keep exact start
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i];
+      const [x1, y1] = pts[i + 1];
+      next.push([x0 + (x1 - x0) * 0.25, y0 + (y1 - y0) * 0.25]);
+      next.push([x0 + (x1 - x0) * 0.75, y0 + (y1 - y0) * 0.75]);
+    }
+    next.push(pts[pts.length - 1]); // keep exact end
+    pts = next;
+  }
+  return pts;
+}
 // Great-circle distance between two [lon,lat] points, in meters (haversine).
 // Used for ETA (distance to destination / velocity).
 function haversineMeters(a: [number, number], b: [number, number]): number {
@@ -504,6 +523,8 @@ export default function FlightMap() {
   const planesRef = useRef<StateVector[]>([]);
   // Wall-clock (ms) of the poll that produced `planesRef` — animation baseline.
   const baseTimeRef = useRef<number>(0);
+  // Unix seconds timestamp of the last processed backend API update (from res.time).
+  const lastApiTimeRef = useRef<number>(0);
   // Selected plane's icao24, readable inside the rAF closure (drives the live
   // trajectory head / prediction / label follow).
   const selectedIcaoRef = useRef<string | null>(null);
@@ -736,19 +757,15 @@ export default function FlightMap() {
     }
     loadHistory(p.trip_id)
       .then((h) => {
-        // Ignore if the user has since selected another plane.
         if (historyTripRef.current !== p.trip_id) return;
         setHistory(h);
         if (h.path.length >= 2) {
-          basePathRef.current = h.path;
-          setTrajectory(h.path);
+          const smoothed = smoothPath(h.path, 4);
+          basePathRef.current = smoothed;
+          setTrajectory(smoothed);
         }
         setTrajectoryLoading(false);
       })
-      .catch((err) => {
-        console.error("[history]", err);
-        setTrajectoryLoading(false);
-      });
   }
 
   // Deselect: close sidebar + clear trajectory, reset line style for next pick.
@@ -883,8 +900,8 @@ export default function FlightMap() {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Backend refreshes ~every 5 min; poll a bit tighter to catch updates.
-    const POLL_MS = 60_000;
+    // Backend refreshes ~every 1 min; poll twice as fast to catch updates with minimal lag.
+    const POLL_MS = 30_000;
     let pollId: ReturnType<typeof setInterval> | undefined;
     let rafId: number | undefined;
 
@@ -969,7 +986,9 @@ export default function FlightMap() {
 
         let planes: StateVector[] = [];
         try {
-          planes = await loadPlanes();
+          const res = await loadPlanes();
+          planes = res.states;
+          lastApiTimeRef.current = res.time;
         } catch (err) {
           console.error(err);
         }
@@ -1526,26 +1545,27 @@ export default function FlightMap() {
 
           const omega = turnRateRef.current.get(selIcao) ?? 0;
           const pred = map.getSource("prediction") as GeoJSONSource | undefined;
-          const ppath = sel.on_ground
+          const ppathRaw = sel.on_ground
             ? []
             : predictPath(
-                sel.longitude,
-                sel.latitude,
-                sel.velocity,
-                sel.true_track,
-                omega
-              );
+              sel.longitude,
+              sel.latitude,
+              sel.velocity,
+              sel.true_track,
+              omega
+            );
+          const ppath = ppathRaw.length >= 3 ? smoothPath(ppathRaw, 1) : ppathRaw;
           pred?.setData({
             type: "FeatureCollection",
             features:
               ppath.length >= 2
                 ? [
-                    {
-                      type: "Feature",
-                      geometry: { type: "LineString", coordinates: ppath },
-                      properties: {},
-                    },
-                  ]
+                  {
+                    type: "Feature",
+                    geometry: { type: "LineString", coordinates: ppath },
+                    properties: {},
+                  },
+                ]
                 : [],
           });
 
@@ -1558,12 +1578,12 @@ export default function FlightMap() {
             type: "FeatureCollection",
             features: turning
               ? [
-                  {
-                    type: "Feature",
-                    geometry: { type: "Point", coordinates: head },
-                    properties: {},
-                  },
-                ]
+                {
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: head },
+                  properties: {},
+                },
+              ]
               : [],
           });
 
@@ -1590,58 +1610,63 @@ export default function FlightMap() {
         // the rAF loop owns the source).
         pollId = setInterval(async () => {
           try {
-            const next = await loadPlanes();
-            setPlaneList(next);
-            planesRef.current = next;
-            updateTurnRates(next);
-            drawConflicts(next);
-            baseTimeRef.current = Date.now();
+            const res = await loadPlanes();
+            // Only update client state and re-baseline interpolation if this is a fresh API snapshot
+            if (res.time > lastApiTimeRef.current) {
+              const next = res.states;
+              lastApiTimeRef.current = res.time;
+              setPlaneList(next);
+              planesRef.current = next;
+              updateTurnRates(next);
+              drawConflicts(next);
+              baseTimeRef.current = Date.now();
 
-            // Prediction accuracy: score last poll's forecast for the selected
-            // plane against its actual new position, then forecast the next poll.
-            const selIcao = selectedIcaoRef.current;
-            const actual = selIcao
-              ? next.find((p) => p.icao24 === selIcao)
-              : undefined;
-            if (actual) {
-              const pr = predictedRef.current;
-              if (pr && pr.icao === selIcao) {
-                setAccuracyKm(
-                  haversineMeters(
-                    [actual.longitude, actual.latitude],
-                    [pr.lon, pr.lat]
-                  ) / 1000
-                );
+              // Prediction accuracy: score last poll's forecast for the selected
+              // plane against its actual new position, then forecast the next poll.
+              const selIcao = selectedIcaoRef.current;
+              const actual = selIcao
+                ? next.find((p) => p.icao24 === selIcao)
+                : undefined;
+              if (actual) {
+                const pr = predictedRef.current;
+                if (pr && pr.icao === selIcao) {
+                  setAccuracyKm(
+                    haversineMeters(
+                      [actual.longitude, actual.latitude],
+                      [pr.lon, pr.lat]
+                    ) / 1000
+                  );
+                }
+                if (
+                  typeof actual.velocity === "number" &&
+                  typeof actual.true_track === "number"
+                ) {
+                  const omega = turnRateRef.current.get(selIcao!) ?? 0;
+                  const pth = predictPath(
+                    actual.longitude,
+                    actual.latitude,
+                    actual.velocity,
+                    actual.true_track,
+                    omega,
+                    POLL_MS / 1000,
+                    10
+                  );
+                  const end = pth[pth.length - 1];
+                  predictedRef.current = {
+                    icao: selIcao!,
+                    lon: end[0],
+                    lat: end[1],
+                  };
+                } else {
+                  predictedRef.current = null;
+                }
               }
-              if (
-                typeof actual.velocity === "number" &&
-                typeof actual.true_track === "number"
-              ) {
-                const omega = turnRateRef.current.get(selIcao!) ?? 0;
-                const pth = predictPath(
-                  actual.longitude,
-                  actual.latitude,
-                  actual.velocity,
-                  actual.true_track,
-                  omega,
-                  POLL_MS / 1000,
-                  10
-                );
-                const end = pth[pth.length - 1];
-                predictedRef.current = {
-                  icao: selIcao!,
-                  lon: end[0],
-                  lat: end[1],
-                };
-              } else {
-                predictedRef.current = null;
-              }
+
+              // Keep the open sidebar in sync with the freshest data.
+              setSelected((prev) =>
+                prev ? next.find((p) => p.icao24 === prev.icao24) ?? prev : null
+              );
             }
-
-            // Keep the open sidebar in sync with the freshest data.
-            setSelected((prev) =>
-              prev ? next.find((p) => p.icao24 === prev.icao24) ?? prev : null
-            );
           } catch (err) {
             console.error(err); // keep last-known planes on a failed poll
           }
@@ -1668,17 +1693,12 @@ export default function FlightMap() {
       | undefined;
     if (!src) return;
     const path = history?.path;
-    const pt = path && path.length >= 2 ? pointAlong(path, replayT) : null;
+    const smoothed = path && path.length >= 2 ? smoothPath(path, 4) : null;
+    const pt = smoothed ? pointAlong(smoothed, replayT) : null;
     src.setData({
       type: "FeatureCollection",
       features: pt
-        ? [
-            {
-              type: "Feature",
-              geometry: { type: "Point", coordinates: pt },
-              properties: {},
-            },
-          ]
+        ? [{ type: "Feature", geometry: { type: "Point", coordinates: pt }, properties: {} }]
         : [],
     });
   }, [replayT, history]);
@@ -1703,18 +1723,18 @@ export default function FlightMap() {
       type: "FeatureCollection",
       features: selectedAirport
         ? [
-            {
-              type: "Feature",
-              geometry: {
-                type: "Point",
-                coordinates: [
-                  selectedAirport.longitude_deg,
-                  selectedAirport.latitude_deg,
-                ],
-              },
-              properties: {},
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [
+                selectedAirport.longitude_deg,
+                selectedAirport.latitude_deg,
+              ],
             },
-          ]
+            properties: {},
+          },
+        ]
         : [],
     });
   }, [selectedAirport]);
@@ -1885,57 +1905,57 @@ export default function FlightMap() {
 
   const flightDetailRows: [string, string | null][] = selected
     ? [
-        ["Status", selected.flight_status],
-        ["From", selected.origin_iata],
-        ["To", selected.destination_iata],
-        ["Dep (sched)", fmtSched(selected.scheduled_departure)],
-        ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
-        ["ETA", eta],
-        [
-          "Forecast err",
-          accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
-        ],
-        ["Altitude", ft(selected.baro_altitude)],
-        [
-          "Speed",
-          typeof selected.velocity === "number"
-            ? `${Math.round(selected.velocity * 1.944)} kts`
-            : null,
-        ],
-        [
-          "Heading",
-          typeof selected.true_track === "number"
-            ? `${Math.round(selected.true_track)}°`
-            : null,
-        ],
-        [
-          "Position",
-          `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
-        ],
-        ["Updated", timeAgo(selected.last_time_position) || null],
-        // Trip-history extras (present once /api/history resolves for this trip).
-        ["Max alt", history ? ft(history.max_altitude) : null],
-        [
-          "Max speed",
-          typeof history?.max_velocity === "number"
-            ? `${Math.round(history.max_velocity * 1.944)} kts`
-            : null,
-        ],
-        ["Trip start", history ? fmtSched(history.trip_start_time) : null],
-        ["Trip end", history ? fmtSched(history.trip_end_time) : null],
-      ]
+      ["Status", selected.flight_status],
+      ["From", selected.origin_iata],
+      ["To", selected.destination_iata],
+      ["Dep (sched)", fmtSched(selected.scheduled_departure)],
+      ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
+      ["ETA", eta],
+      [
+        "Forecast err",
+        accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
+      ],
+      ["Altitude", ft(selected.baro_altitude)],
+      [
+        "Speed",
+        typeof selected.velocity === "number"
+          ? `${Math.round(selected.velocity * 1.944)} kts`
+          : null,
+      ],
+      [
+        "Heading",
+        typeof selected.true_track === "number"
+          ? `${Math.round(selected.true_track)}°`
+          : null,
+      ],
+      [
+        "Position",
+        `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
+      ],
+      ["Updated", timeAgo(selected.last_time_position) || null],
+      // Trip-history extras (present once /api/history resolves for this trip).
+      ["Max alt", history ? ft(history.max_altitude) : null],
+      [
+        "Max speed",
+        typeof history?.max_velocity === "number"
+          ? `${Math.round(history.max_velocity * 1.944)} kts`
+          : null,
+      ],
+      ["Trip start", history ? fmtSched(history.trip_start_time) : null],
+      ["Trip end", history ? fmtSched(history.trip_end_time) : null],
+    ]
     : [];
 
   const aircraftDetailRows: [string, string | null][] = selected
     ? [
-        ["Aircraft", selected.model],
-        ["Type", selected.typecode],
-        ["Maker", selected.manufacturername],
-        ["Registration", selected.registration],
-        ["Airline/Owner", selected.owner ?? selected.operator_callsign],
-        ["ICAO24", selected.icao24],
-        ["Country", selected.origin_country || null],
-      ]
+      ["Aircraft", selected.model],
+      ["Type", selected.typecode],
+      ["Maker", selected.manufacturername],
+      ["Registration", selected.registration],
+      ["Airline/Owner", selected.owner ?? selected.operator_callsign],
+      ["ICAO24", selected.icao24],
+      ["Country", selected.origin_country || null],
+    ]
     : [];
 
   // Flights-list filter: case-insensitive substring across the fields a user
@@ -1943,27 +1963,27 @@ export default function FlightMap() {
   const q = query.trim().toLowerCase();
   const filteredPlanes = q
     ? planeList.filter((p) =>
-        [
-          p.callsign,
-          p.owner,
-          p.operator_callsign,
-          p.origin_iata,
-          p.destination_iata,
-          p.icao24,
-        ]
-          .filter(Boolean)
-          .some((v) => (v as string).toLowerCase().includes(q))
-      )
+      [
+        p.callsign,
+        p.owner,
+        p.operator_callsign,
+        p.origin_iata,
+        p.destination_iata,
+        p.icao24,
+      ]
+        .filter(Boolean)
+        .some((v) => (v as string).toLowerCase().includes(q))
+    )
     : planeList;
 
   const aq = airportQuery.trim().toLowerCase();
   const filteredAirports = (
     aq
       ? airportList.filter((a) =>
-          [a.name, a.iata_code, a.icao_code, a.iso_country]
-            .filter(Boolean)
-            .some((v) => (v as string).toLowerCase().includes(aq))
-        )
+        [a.name, a.iata_code, a.icao_code, a.iso_country]
+          .filter(Boolean)
+          .some((v) => (v as string).toLowerCase().includes(aq))
+      )
       : airportList
   ).filter((a) => !a.name.startsWith("[Duplicate]"));
 
@@ -2017,7 +2037,7 @@ export default function FlightMap() {
           ⚠ {conflictCount} near-miss {conflictCount === 1 ? "pair" : "pairs"}
         </div>
       )}
-     <div className="pointer-events-none absolute left-1/2 top-14 z-10 -translate-x-1/2 rounded-md border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-mono font-medium text-white/85 backdrop-blur">
+      <div className="pointer-events-none absolute left-1/2 top-14 z-10 -translate-x-1/2 rounded-md border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-mono font-medium text-white/85 backdrop-blur">
         {nowWib} <span className="text-white/40">WIB</span>
       </div>
       <div className="absolute left-4 top-4 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
@@ -2026,11 +2046,10 @@ export default function FlightMap() {
             key={m.id}
             type="button"
             onClick={() => selectBasemap(m.id)}
-            className={`px-3 py-1.5 transition-colors ${
-              basemap === m.id
+            className={`px-3 py-1.5 transition-colors ${basemap === m.id
                 ? "bg-white/90 text-black"
                 : "text-white/80 hover:bg-white/10"
-            }`}
+              }`}
           >
             {m.label}
           </button>
@@ -2039,22 +2058,20 @@ export default function FlightMap() {
         <button
           type="button"
           onClick={togglePlanes}
-          className={`px-3 py-1.5 transition-colors ${
-            showPlanes
+          className={`px-3 py-1.5 transition-colors ${showPlanes
               ? "bg-white/90 text-black"
               : "text-white/80 hover:bg-white/10"
-          }`}
+            }`}
         >
           ✈
         </button>
         <button
           type="button"
           onClick={toggleAirports}
-          className={`px-3 py-1.5 transition-colors ${
-            showAirports
+          className={`px-3 py-1.5 transition-colors ${showAirports
               ? "bg-white/90 text-black"
               : "text-white/80 hover:bg-white/10"
-          }`}
+            }`}
         >
           🏢
         </button>
@@ -2067,22 +2084,20 @@ export default function FlightMap() {
           <button
             type="button"
             onClick={() => setPanelTab("flights")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
-              panelTab === "flights"
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "flights"
                 ? "border-sky-500 text-white bg-white/5"
                 : "border-transparent text-white/50 hover:text-white/80"
-            }`}
+              }`}
           >
             Flights ({planeList.length})
           </button>
           <button
             type="button"
             onClick={() => setPanelTab("airports")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
-              panelTab === "airports"
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "airports"
                 ? "border-sky-500 text-white bg-white/5"
                 : "border-transparent text-white/50 hover:text-white/80"
-            }`}
+              }`}
           >
             Airports ({airportList.length})
           </button>
@@ -2134,8 +2149,8 @@ export default function FlightMap() {
                   const alt =
                     typeof p.baro_altitude === "number"
                       ? `${Math.round(
-                          p.baro_altitude * 3.281
-                        ).toLocaleString()} ft`
+                        p.baro_altitude * 3.281
+                      ).toLocaleString()} ft`
                       : "—";
                   const spd =
                     typeof p.velocity === "number"
@@ -2143,9 +2158,8 @@ export default function FlightMap() {
                       : "—";
                   const route =
                     p.origin_iata || p.destination_iata
-                      ? `${p.origin_iata ?? "???"} → ${
-                          p.destination_iata ?? "???"
-                        }`
+                      ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
+                      }`
                       : null;
                   const ago = timeAgo(p.last_time_position);
                   const meta = [p.flight_status, ago]
@@ -2156,16 +2170,14 @@ export default function FlightMap() {
                       <button
                         type="button"
                         onClick={() => selectPlane(p)}
-                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
-                          selected?.icao24 === p.icao24 ? "bg-sky-500/20" : ""
-                        }`}
+                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selected?.icao24 === p.icao24 ? "bg-sky-500/20" : ""
+                          }`}
                       >
                         <span className="flex w-full items-center justify-between gap-2">
                           <span className="flex items-center gap-1.5 truncate">
                             <span
-                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                                p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                              }`}
+                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                                }`}
                             />
                             <span className="truncate font-medium text-white/90">
                               {cs}
@@ -2203,20 +2215,18 @@ export default function FlightMap() {
             <ul className="divide-y divide-white/5 overflow-y-auto">
               {filteredAirports.map((a, i) => (
                 <li
-                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${
-                    a.latitude_deg
-                  }-${a.longitude_deg}-${i}`}
+                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${a.latitude_deg
+                    }-${a.longitude_deg}-${i}`}
                 >
                   {" "}
                   <button
                     type="button"
                     onClick={() => selectAirportFromList(a)}
-                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
-                      selectedAirport?.icao_code === a.icao_code &&
-                      selectedAirport?.name === a.name
+                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedAirport?.icao_code === a.icao_code &&
+                        selectedAirport?.name === a.name
                         ? "bg-sky-500/20"
                         : ""
-                    }`}
+                      }`}
                   >
                     <span className="flex w-full items-center justify-between gap-2">
                       <span className="truncate font-medium text-white/90">
@@ -2247,9 +2257,8 @@ export default function FlightMap() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span
-                  className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                    selected.on_ground ? "bg-white/40" : "bg-emerald-400"
-                  }`}
+                  className={`inline-block h-2 w-2 shrink-0 rounded-full ${selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+                    }`}
                 />
                 <span className="truncate text-sm font-semibold text-white">
                   {(selected.callsign ?? "").trim() || selected.icao24}
@@ -2271,11 +2280,10 @@ export default function FlightMap() {
                   followRef.current = v;
                 }}
                 aria-pressed={follow}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  follow
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${follow
                     ? "bg-sky-500/80 text-white"
                     : "bg-white/10 text-white/70 hover:bg-white/20"
-                }`}
+                  }`}
               >
                 Follow
               </button>
@@ -2293,22 +2301,20 @@ export default function FlightMap() {
             <button
               type="button"
               onClick={() => setSidebarTab("flight")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                sidebarTab === "flight"
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${sidebarTab === "flight"
                   ? "border-sky-500 text-white bg-white/5"
                   : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+                }`}
             >
               Flight
             </button>
             <button
               type="button"
               onClick={() => setSidebarTab("aircraft")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                sidebarTab === "aircraft"
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${sidebarTab === "aircraft"
                   ? "border-sky-500 text-white bg-white/5"
                   : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+                }`}
             >
               Aircraft
             </button>
@@ -2485,8 +2491,8 @@ export default function FlightMap() {
                   "Type",
                   selectedAirport.type
                     ? selectedAirport.type
-                        .replace(/_/g, " ")
-                        .replace(/\b\w/g, (c) => c.toUpperCase())
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())
                     : null,
                 ],
               ] as [string, string | null][]
@@ -2504,6 +2510,17 @@ export default function FlightMap() {
           </dl>
         </div>
       )}
+      <div className="pointer-events-none absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black/40 px-2 py-0.5 text-[9px] text-white/40 backdrop-blur-sm">
+        Flight Data By:{" "}
+        
+        <a href="https://www.opensky-network.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pointer-events-auto text-sky-400 underline hover:text-sky-300"
+        >
+          OpenSky Network
+        </a>
     </div>
+    </div >
   );
 }
