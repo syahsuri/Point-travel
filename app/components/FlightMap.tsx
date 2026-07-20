@@ -8,7 +8,10 @@ import maplibregl, {
 import { loadPlanes } from "@/lib/planes";
 import { loadHistory } from "@/lib/history";
 import { loadAirports } from "@/lib/airports";
+import { loadSchedule } from "@/lib/schedule";
+import type { ScheduleEntry } from "@/lib/types";
 import type { StateVector, TripHistory, Airport } from "@/lib/types";
+
 
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
@@ -549,6 +552,10 @@ export default function FlightMap() {
 
   const [nowWib, setNowWib] = useState<string>("");
 
+  const [airportBoardTab, setAirportBoardTab] = useState<"arrival" | "departure">("departure");
+  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
     const map = mapRef.current;
@@ -808,6 +815,7 @@ export default function FlightMap() {
   function selectAirportFromList(a: Airport) {
     deselectPlane();
     setSelectedAirport(a);
+    setAirportBoardTab("departure");
     const map = mapRef.current;
     if (map) {
       map.flyTo({
@@ -1371,6 +1379,7 @@ export default function FlightMap() {
                   longitude_deg: coords[0],
                   latitude_deg: coords[1],
                 });
+                setAirportBoardTab("departure");
                 map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 8) });
               });
               map.on("mouseenter", "airport-dot", () => {
@@ -1738,6 +1747,32 @@ export default function FlightMap() {
         : [],
     });
   }, [selectedAirport]);
+
+  // Fetch arrivals/departures for the selected airport whenever the airport
+  // or the arrival/departure tab changes.
+  useEffect(() => {
+    if (!selectedAirport?.iata_code) {
+      setSchedule([]);
+      return;
+    }
+    let cancelled = false;
+    setScheduleLoading(true);
+    const type = airportBoardTab === "arrival" ? "A" : "D";
+    loadSchedule(selectedAirport.iata_code, type, 50)
+      .then((entries) => {
+        if (!cancelled) setSchedule(entries);
+      })
+      .catch((err) => {
+        console.error("[schedule]", err);
+        if (!cancelled) setSchedule([]);
+      })
+      .finally(() => {
+        if (!cancelled) setScheduleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAirport, airportBoardTab]);
 
   // Auto-play the replay: advance the scrubber ~5s end-to-end, stop at the end.
   useEffect(() => {
@@ -2478,6 +2513,76 @@ export default function FlightMap() {
                 Placeholder Photo
               </div>
             </div>
+          </div>
+
+          {/* ARRIVAL/DEPARTURE TABS */}
+          <div className="flex border-b border-white/10 bg-white/5 shrink-0 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setAirportBoardTab("departure")}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
+                airportBoardTab === "departure"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
+            >
+              Departures
+            </button>
+            <button
+              type="button"
+              onClick={() => setAirportBoardTab("arrival")}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
+                airportBoardTab === "arrival"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
+            >
+              Arrivals
+            </button>
+          </div>
+
+          <div className="overflow-y-auto">
+            {scheduleLoading && (
+              <div className="px-3 py-4 text-center text-white/40">Loading…</div>
+            )}
+            {!scheduleLoading && schedule.length === 0 && (
+              <div className="px-3 py-4 text-center text-white/40">No flights found.</div>
+            )}
+            {!scheduleLoading && schedule.length > 0 && (
+              <ul className="divide-y divide-white/5">
+                {schedule.map((s, i) => {
+                  const time = fmtSched(s.sched_time);
+                  const route =
+                    airportBoardTab === "departure"
+                      ? s.route_airport_iata ?? "???"
+                      : s.route_airport_iata ?? "???";
+                  return (
+                    <li
+                      key={`${s.flight_no ?? s.callsign ?? i}-${s.sched_time ?? i}`}
+                      className="flex items-center justify-between gap-2 px-3 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-white/90">
+                          {s.flight_no ?? s.callsign ?? "—"}
+                          <span className="ml-1.5 text-white/40">
+                            {s.airline_name ?? ""}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-white/45">
+                          {airportBoardTab === "departure" ? "To" : "From"} {route}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-white/80">{time ?? "—"}</div>
+                        {s.board_status && (
+                          <div className="text-[10px] text-white/45">{s.board_status}</div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           {/* Info rows */}

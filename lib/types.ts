@@ -115,3 +115,34 @@ export interface TripHistory {
   /** Flown path as [lon, lat] pairs, in chronological order. */
   path: [number, number][];
 }
+
+export type ScheduleEntry = {
+  board_type: "A" | "D" | null;
+  board_airport_iata: string | null;
+  board_airport_name: string | null;
+  country_id: string | null;
+  flight_no: string | null;
+  airline_name: string | null;
+  airline_iata: string | null;
+  sched_time: string | null;
+  route_airport_iata: string | null;
+  sched_dep: string | null;
+  sched_arr: string | null;
+  icao24: string | null;
+  callsign: string | null;
+  registration: string | null;
+  model: string | null;
+  typecode: string | null;
+  origin_iata: string | null;
+  destination_iata: string | null;
+  flight_status: string | null;
+  last_time_position: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  baro_altitude: number | null;
+  velocity: number | null;
+  true_track: number | null;
+  is_completed: boolean;
+  board_status: string | null;
+  schedule_date: string | null;
+};
