@@ -13,6 +13,7 @@ import type { ScheduleEntry } from "@/lib/types";
 import type { StateVector, TripHistory, Airport } from "@/lib/types";
 
 
+
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -2082,8 +2083,8 @@ export default function FlightMap() {
             type="button"
             onClick={() => selectBasemap(m.id)}
             className={`px-3 py-1.5 transition-colors ${basemap === m.id
-                ? "bg-white/90 text-black"
-                : "text-white/80 hover:bg-white/10"
+              ? "bg-white/90 text-black"
+              : "text-white/80 hover:bg-white/10"
               }`}
           >
             {m.label}
@@ -2094,8 +2095,8 @@ export default function FlightMap() {
           type="button"
           onClick={togglePlanes}
           className={`px-3 py-1.5 transition-colors ${showPlanes
-              ? "bg-white/90 text-black"
-              : "text-white/80 hover:bg-white/10"
+            ? "bg-white/90 text-black"
+            : "text-white/80 hover:bg-white/10"
             }`}
         >
           ✈
@@ -2104,8 +2105,8 @@ export default function FlightMap() {
           type="button"
           onClick={toggleAirports}
           className={`px-3 py-1.5 transition-colors ${showAirports
-              ? "bg-white/90 text-black"
-              : "text-white/80 hover:bg-white/10"
+            ? "bg-white/90 text-black"
+            : "text-white/80 hover:bg-white/10"
             }`}
         >
           🏢
@@ -2120,8 +2121,8 @@ export default function FlightMap() {
             type="button"
             onClick={() => setPanelTab("flights")}
             className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "flights"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
+              ? "border-sky-500 text-white bg-white/5"
+              : "border-transparent text-white/50 hover:text-white/80"
               }`}
           >
             Flights ({planeList.length})
@@ -2130,8 +2131,8 @@ export default function FlightMap() {
             type="button"
             onClick={() => setPanelTab("airports")}
             className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "airports"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
+              ? "border-sky-500 text-white bg-white/5"
+              : "border-transparent text-white/50 hover:text-white/80"
               }`}
           >
             Airports ({airportList.length})
@@ -2258,9 +2259,9 @@ export default function FlightMap() {
                     type="button"
                     onClick={() => selectAirportFromList(a)}
                     className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedAirport?.icao_code === a.icao_code &&
-                        selectedAirport?.name === a.name
-                        ? "bg-sky-500/20"
-                        : ""
+                      selectedAirport?.name === a.name
+                      ? "bg-sky-500/20"
+                      : ""
                       }`}
                   >
                     <span className="flex w-full items-center justify-between gap-2">
@@ -2316,8 +2317,8 @@ export default function FlightMap() {
                 }}
                 aria-pressed={follow}
                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${follow
-                    ? "bg-sky-500/80 text-white"
-                    : "bg-white/10 text-white/70 hover:bg-white/20"
+                  ? "bg-sky-500/80 text-white"
+                  : "bg-white/10 text-white/70 hover:bg-white/20"
                   }`}
               >
                 Follow
@@ -2337,8 +2338,8 @@ export default function FlightMap() {
               type="button"
               onClick={() => setSidebarTab("flight")}
               className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${sidebarTab === "flight"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
                 }`}
             >
               Flight
@@ -2347,8 +2348,8 @@ export default function FlightMap() {
               type="button"
               onClick={() => setSidebarTab("aircraft")}
               className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${sidebarTab === "aircraft"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
                 }`}
             >
               Aircraft
@@ -2520,22 +2521,20 @@ export default function FlightMap() {
             <button
               type="button"
               onClick={() => setAirportBoardTab("departure")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                airportBoardTab === "departure"
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "departure"
                   ? "border-sky-500 text-white bg-white/5"
                   : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+                }`}
             >
               Departures
             </button>
             <button
               type="button"
               onClick={() => setAirportBoardTab("arrival")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                airportBoardTab === "arrival"
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "arrival"
                   ? "border-sky-500 text-white bg-white/5"
                   : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+                }`}
             >
               Arrivals
             </button>
@@ -2617,7 +2616,7 @@ export default function FlightMap() {
       )}
       <div className="pointer-events-none absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black/40 px-2 py-0.5 text-[9px] text-white/40 backdrop-blur-sm">
         Flight Data By:{" "}
-        
+
         <a href="https://www.opensky-network.org/"
           target="_blank"
           rel="noopener noreferrer"
@@ -2625,7 +2624,7 @@ export default function FlightMap() {
         >
           OpenSky Network
         </a>
-    </div>
+      </div>
     </div >
   );
 }
