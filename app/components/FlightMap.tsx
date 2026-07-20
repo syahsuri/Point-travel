@@ -460,6 +460,17 @@ function predictPath(
   return pts;
 }
 
+const STATUS_TEXT_COLOR: Record<string, string> = {
+  EnRoute: "text-sky-400",
+  Scheduled: "text-amber-400",
+  Landed: "text-emerald-400",
+};
+
+function statusTextClass(status: string | null | undefined): string {
+  if (!status) return "text-white/45";
+  return STATUS_TEXT_COLOR[status] ?? "text-white/45";
+}
+
 // Trim an ISO timestamp to "YYYY-MM-DD HH:MM" for display. Null-safe.
 // Format an ISO timestamp as WIB (UTC+7), e.g. "2026-07-14 15:30 WIB".
 // Backend sends naive ISO (no tz) meaning UTC — append Z, then shift +7h.
@@ -475,6 +486,8 @@ function fmtSched(iso: string | null): string | null {
     wib.getUTCDate()
   )} ${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())} WIB`;
 }
+
+
 
 export default function FlightMap() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2603,9 +2616,13 @@ export default function FlightMap() {
                         </span>
                       </div>
                       {/* Row 2: Time | Status */}
-                      <div className="flex items-center justify-between gap-2 text-[10px] text-white/60">
-                        <span>{time ?? "—"}</span>
-                        <span>{s.board_status ?? ""}</span>
+                      <div className="flex items-center justify-between gap-2 text-[10px]">
+                        <span className="text-white/60">{time ?? "—"}</span>
+                        {s.board_status && (
+                          <span className={`font-medium ${statusTextClass(s.board_status)}`}>
+                            {s.board_status}
+                          </span>
+                        )}
                       </div>
                       {/* Row 3: From | Target */}
                       <div className="flex items-center justify-between gap-2 text-[10px] text-white/45">
