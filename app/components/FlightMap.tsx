@@ -2525,6 +2525,32 @@ export default function FlightMap() {
             </div>
           </div>
 
+          {/* Info rows — fixed, right below the photo */}
+          <dl className="divide-y divide-white/5 border-b border-white/10 shrink-0">
+            {(
+              [
+                ["IATA", selectedAirport.iata_code],
+                ["ICAO", selectedAirport.icao_code],
+                ["Country", selectedAirport.iso_country || null],
+                [
+                  "Type",
+                  selectedAirport.type
+                    ? selectedAirport.type
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())
+                    : null,
+                ],
+              ] as [string, string | null][]
+            )
+              .filter(([, v]) => v)
+              .map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-3 px-3 py-1.5">
+                  <dt className="shrink-0 text-white/45">{label}</dt>
+                  <dd className="truncate text-right text-white/90">{value}</dd>
+                </div>
+              ))}
+          </dl>
+
           {/* ARRIVAL/DEPARTURE TABS */}
           <div className="flex border-b border-white/10 bg-white/5 shrink-0 text-[11px]">
             <button
@@ -2549,7 +2575,8 @@ export default function FlightMap() {
             </button>
           </div>
 
-          <div className="overflow-y-auto">
+          {/* Schedule list — the only scrolling region now */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {scheduleLoading && (
               <div className="px-3 py-4 text-center text-white/40">Loading…</div>
             )}
@@ -2560,31 +2587,30 @@ export default function FlightMap() {
               <ul className="divide-y divide-white/5">
                 {schedule.map((s, i) => {
                   const time = fmtSched(s.sched_time);
-                  const route =
-                    airportBoardTab === "departure"
-                      ? s.route_airport_iata ?? "???"
-                      : s.route_airport_iata ?? "???";
+                  const route = s.route_airport_iata ?? "???";
                   return (
                     <li
                       key={`${s.flight_no ?? s.callsign ?? i}-${s.sched_time ?? i}`}
-                      className="flex items-center justify-between gap-2 px-3 py-1.5"
+                      className="flex flex-col gap-0.5 px-3 py-1.5"
                     >
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-white/90">
+                      {/* Row 1: Flight_no | Airline name */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate font-medium text-white/90">
                           {s.flight_no ?? s.callsign ?? "—"}
-                          <span className="ml-1.5 text-white/40">
-                            {s.airline_name ?? ""}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-white/45">
-                          {airportBoardTab === "departure" ? "To" : "From"} {route}
-                        </div>
+                        </span>
+                        <span className="shrink-0 truncate text-white/50">
+                          {s.airline_name ?? ""}
+                        </span>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-white/80">{time ?? "—"}</div>
-                        {s.board_status && (
-                          <div className="text-[10px] text-white/45">{s.board_status}</div>
-                        )}
+                      {/* Row 2: Time | Status */}
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-white/60">
+                        <span>{time ?? "—"}</span>
+                        <span>{s.board_status ?? ""}</span>
+                      </div>
+                      {/* Row 3: From | Target */}
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-white/45">
+                        <span>{airportBoardTab === "departure" ? "To" : "From"}</span>
+                        <span className="truncate">{route}</span>
                       </div>
                     </li>
                   );
@@ -2592,41 +2618,12 @@ export default function FlightMap() {
               </ul>
             )}
           </div>
-
-          {/* Info rows */}
-          <dl className="divide-y divide-white/5 overflow-y-auto">
-            {(
-              [
-                ["IATA", selectedAirport.iata_code],
-                ["ICAO", selectedAirport.icao_code],
-                ["Country", selectedAirport.iso_country || null],
-                [
-                  "Type",
-                  selectedAirport.type
-                    ? selectedAirport.type
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (c) => c.toUpperCase())
-                    : null,
-                ],
-              ] as [string, string | null][]
-            )
-              .filter(([, v]) => v)
-              .map(([label, value]) => (
-                <div
-                  key={label}
-                  className="flex justify-between gap-3 px-3 py-1.5"
-                >
-                  <dt className="shrink-0 text-white/45">{label}</dt>
-                  <dd className="truncate text-right text-white/90">{value}</dd>
-                </div>
-              ))}
-          </dl>
         </div>
       )}
       <div className="pointer-events-none absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black/40 px-2 py-0.5 text-[9px] text-white/40 backdrop-blur-sm">
         Flight Data By:{" "}
 
-        <a href="https://www.opensky-network.org/"
+        <a href="https://opensky-network.org/"
           target="_blank"
           rel="noopener noreferrer"
           className="pointer-events-auto text-sky-400 underline hover:text-sky-300"
