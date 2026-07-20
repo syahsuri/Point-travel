@@ -558,13 +558,14 @@ export default function FlightMap() {
     key: string;
     entries: ScheduleEntry[];
   } | null>(null);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   const scheduleKey = selectedAirport?.iata_code
     ? `${selectedAirport.iata_code}-${airportBoardTab === "arrival" ? "A" : "D"}`
     : null;
   const schedule =
     scheduleData && scheduleData.key === scheduleKey ? scheduleData.entries : [];
+
+  const scheduleLoading = scheduleKey !== null && (!scheduleData || scheduleData.key !== scheduleKey);
 
 
   function selectBasemap(mode: Basemap) {
@@ -1761,31 +1762,27 @@ export default function FlightMap() {
 
   // Fetch arrivals/departures for the selected airport whenever the airport
   // or the arrival/departure tab changes.
- useEffect(() => {
-  const iata = selectedAirport?.iata_code;
-  if (!iata) return; // nothing to fetch; `schedule` derives to [] on its own
+  useEffect(() => {
+    const iata = selectedAirport?.iata_code;
+    if (!iata) return; // nothing to fetch; `schedule` derives to [] on its own
 
-  let cancelled = false;
-  setScheduleLoading(true);
-  const type = airportBoardTab === "arrival" ? "A" : "D";
-  const key = `${iata}-${type}`;
+    let cancelled = false;
+    const type = airportBoardTab === "arrival" ? "A" : "D";
+    const key = `${iata}-${type}`;
 
-  loadSchedule(iata, type, 50)
-    .then((entries) => {
-      if (!cancelled) setScheduleData({ key, entries });
-    })
-    .catch((err) => {
-      console.error("[schedule]", err);
-      if (!cancelled) setScheduleData({ key, entries: [] });
-    })
-    .finally(() => {
-      if (!cancelled) setScheduleLoading(false);
-    });
+    loadSchedule(iata, type, 50)
+      .then((entries) => {
+        if (!cancelled) setScheduleData({ key, entries });
+      })
+      .catch((err) => {
+        console.error("[schedule]", err);
+        if (!cancelled) setScheduleData({ key, entries: [] });
+      });
 
-  return () => {
-    cancelled = true;
-  };
-}, [selectedAirport, airportBoardTab]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAirport, airportBoardTab]);
 
   // Auto-play the replay: advance the scrubber ~5s end-to-end, stop at the end.
   useEffect(() => {
