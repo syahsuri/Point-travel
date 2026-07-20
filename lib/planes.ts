@@ -1,4 +1,4 @@
-import type { StateVector, StatesResponse } from "./types";
+import type { StatesResponse } from "./types";
 
 /**
  * The single seam between the UI and the data source.
