@@ -554,8 +554,18 @@ export default function FlightMap() {
   const [nowWib, setNowWib] = useState<string>("");
 
   const [airportBoardTab, setAirportBoardTab] = useState<"arrival" | "departure">("departure");
-  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+  const [scheduleData, setScheduleData] = useState<{
+    key: string;
+    entries: ScheduleEntry[];
+  } | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+
+  const scheduleKey = selectedAirport?.iata_code
+    ? `${selectedAirport.iata_code}-${airportBoardTab === "arrival" ? "A" : "D"}`
+    : null;
+  const schedule =
+    scheduleData && scheduleData.key === scheduleKey ? scheduleData.entries : [];
+
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
@@ -1751,29 +1761,31 @@ export default function FlightMap() {
 
   // Fetch arrivals/departures for the selected airport whenever the airport
   // or the arrival/departure tab changes.
-  useEffect(() => {
-    if (!selectedAirport?.iata_code) {
-      setSchedule([]);
-      return;
-    }
-    let cancelled = false;
-    setScheduleLoading(true);
-    const type = airportBoardTab === "arrival" ? "A" : "D";
-    loadSchedule(selectedAirport.iata_code, type, 50)
-      .then((entries) => {
-        if (!cancelled) setSchedule(entries);
-      })
-      .catch((err) => {
-        console.error("[schedule]", err);
-        if (!cancelled) setSchedule([]);
-      })
-      .finally(() => {
-        if (!cancelled) setScheduleLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedAirport, airportBoardTab]);
+ useEffect(() => {
+  const iata = selectedAirport?.iata_code;
+  if (!iata) return; // nothing to fetch; `schedule` derives to [] on its own
+
+  let cancelled = false;
+  setScheduleLoading(true);
+  const type = airportBoardTab === "arrival" ? "A" : "D";
+  const key = `${iata}-${type}`;
+
+  loadSchedule(iata, type, 50)
+    .then((entries) => {
+      if (!cancelled) setScheduleData({ key, entries });
+    })
+    .catch((err) => {
+      console.error("[schedule]", err);
+      if (!cancelled) setScheduleData({ key, entries: [] });
+    })
+    .finally(() => {
+      if (!cancelled) setScheduleLoading(false);
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, [selectedAirport, airportBoardTab]);
 
   // Auto-play the replay: advance the scrubber ~5s end-to-end, stop at the end.
   useEffect(() => {
@@ -2522,8 +2534,8 @@ export default function FlightMap() {
               type="button"
               onClick={() => setAirportBoardTab("departure")}
               className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "departure"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
                 }`}
             >
               Departures
@@ -2532,8 +2544,8 @@ export default function FlightMap() {
               type="button"
               onClick={() => setAirportBoardTab("arrival")}
               className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "arrival"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
                 }`}
             >
               Arrivals
