@@ -3,18 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl, { type GeoJSONSource } from "maplibre-gl";
 import { loadPlanes } from "@/lib/planes";
-import { loadHistory } from "@/lib/history";
 import { loadAirports } from "@/lib/airports";
-import { loadSchedule } from "@/lib/schedule";
-import type { ScheduleEntry } from "@/lib/types";
-import type { StateVector, TripHistory, Airport } from "@/lib/types";
+import type { StateVector, Airport } from "@/lib/types";
+import { useKonamiCode } from "@/lib/hooks/useKonamiCode";
+import { useWibClock } from "@/lib/hooks/useWibClock";
+import { useAirportSelection } from "@/lib/hooks/useAirportSelection";
+import { usePlaneSelection } from "@/lib/hooks/usePlaneSelection";
 
 import {
   angDelta,
   greatCircle,
   smoothPath,
   haversineMeters,
-  pointAlong,
   deadReckon,
   predictPath,
 } from "@/lib/geo";
@@ -23,14 +23,11 @@ import { timeAgo, posSecs, fmtSched, statusTextClass } from "@/lib/format";
 import {
   type Basemap,
   INDONESIA_BOUNDS,
-  KONAMI_CODE,
   PLANE_ICON_SRC,
   PLANE_ICON_W,
   PLANE_ICON_H,
-  SELECTED_PLANE_ICON_SRC,
-  SELECTED_PLANE_ICON_W,
-  SELECTED_PLANE_ICON_H,
 } from "@/lib/mapConstants";
+
 import { BASE_STYLE, setBasemap } from "@/lib/mapStyle";
 
 import ClockBadge from "@/components/flight-map/ClockBadge";
@@ -95,7 +92,6 @@ export default function FlightMap() {
   const [basemap, setBasemapState] = useState<Basemap>("streets");
   const [planeList, setPlaneList] = useState<StateVector[]>([]);
   const [airportList, setAirportList] = useState<Airport[]>([]);
-  const [selectedAirport, setSelectedAirport] = useState<Airport | null>(null);
   const [listOpen, setListOpen] = useState(true);
   // search panel airports
   const [panelTab, setPanelTab] = useState<"flights" | "airports">("flights");
@@ -106,29 +102,11 @@ export default function FlightMap() {
   const [query, setQuery] = useState("");
   const [sortDesc, setSortDesc] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<"flight" | "aircraft">("flight");
-  // Camera auto-follow of the selected plane. Ref mirrors state for the rAF loop.
-  const [follow, setFollow] = useState(false);
-  const followRef = useRef(false);
-  // Count of converging plane pairs flagged by the near-miss radar.
   const [conflictCount, setConflictCount] = useState(0);
   // Where we predicted the selected plane would be by the next poll, so the next
   // poll can measure the forecast error. Plus the resulting error (km) for the HUD.
-  const predictedRef = useRef<{
-    icao: string;
-    lon: number;
-    lat: number;
-  } | null>(null);
-  const [accuracyKm, setAccuracyKm] = useState<number | null>(null);
-  // Flight-replay scrubber: position (0..1) along the selected trip's recorded
-  // path, and whether it's auto-playing.
-  const [replayT, setReplayT] = useState(0);
-  const [replaying, setReplaying] = useState(false);
-  // Currently selected plane -> drives the detail sidebar.
-  const [selected, setSelected] = useState<StateVector | null>(null);
-  // Actual flown track for the selection (fetched lazily on select).
-  const [history, setHistory] = useState<TripHistory | null>(null);
-  // trip_id of the in-flight history fetch, to ignore stale resolutions.
-  const historyTripRef = useRef<string | null>(null);
+ 
+  
   // Latest planes, readable from the (once-registered) map click handler.
   const planesRef = useRef<StateVector[]>([]);
   // Wall-clock (ms) of the poll that produced `planesRef` — animation baseline.
@@ -137,13 +115,6 @@ export default function FlightMap() {
   const lastApiTimeRef = useRef<number>(0);
   // Selected plane's icao24, readable inside the rAF closure (drives the live
   // trajectory head / prediction / label follow).
-  const selectedIcaoRef = useRef<string | null>(null);
-  // Flown/great-circle path BEHIND the plane (no live head point). The rAF loop
-  // appends the current animated position so the line stays glued to the marker.
-  const basePathRef = useRef<[number, number][]>([]);
-  // Marker that replaces the static icon while selected.
-  const selectedMarkerRef = useRef<maplibregl.Marker | null>(null);
-  // Per-icao24 last heading sample + its timestamp, to derive turn rate.
   const prevTrackRef = useRef<Map<string, { track: number; t: number }>>(
     new Map()
   );
@@ -151,35 +122,47 @@ export default function FlightMap() {
   const turnRateRef = useRef<Map<string, number>>(new Map());
   // True while showing the great-circle placeholder, before real history
   // arrives. Drives the dimmed/dashed "loading" style on the trajectory line.
-  const trajectoryLoadingRef = useRef(false);
 
   const [chaosMode, setChaosMode] = useState(false);
+  const {
+    selected,
+    setSelected,
+    history,
+    follow,
+    toggleFollow,
+    followRef,
+    accuracyKm,
+    setAccuracyKm,
+    replayT,
+    setReplayT,
+    replaying,
+    setReplaying,
+    selectPlane,
+    deselectPlane,
+    selectedIcaoRef,
+    basePathRef,
+    selectedMarkerRef,
+    predictedRef,
+    trajectoryLoadingRef,
+    historyTripRef,
+    setTrajectory,
+    clearTrajectory,
+    setTrajectoryLoading,
+    drawTrajectory,
+  } = usePlaneSelection({ mapRef, airportsRef, onSelect: () => deselectAirport() });
 
-  const konamiIndexRef = useRef(0);
+  const {
+    selectedAirport,
+    setSelectedAirport,
+    airportBoardTab,
+    setAirportBoardTab,
+    schedule,
+    scheduleLoading,
+    selectAirport: selectAirportFromList,
+    deselectAirport,
+  } = useAirportSelection({ mapRef, onSelect: () => deselectPlane() });
 
-  const [nowWib, setNowWib] = useState<string>("");
-
-  const [airportBoardTab, setAirportBoardTab] = useState<
-    "arrival" | "departure"
-  >("departure");
-  const [scheduleData, setScheduleData] = useState<{
-    key: string;
-    entries: ScheduleEntry[];
-  } | null>(null);
-
-  const scheduleKey = selectedAirport?.iata_code
-    ? `${selectedAirport.iata_code}-${
-        airportBoardTab === "arrival" ? "A" : "D"
-      }`
-    : null;
-  const schedule =
-    scheduleData && scheduleData.key === scheduleKey
-      ? scheduleData.entries
-      : [];
-
-  const scheduleLoading =
-    scheduleKey !== null && (!scheduleData || scheduleData.key !== scheduleKey);
-
+  
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
     const map = mapRef.current;
@@ -222,235 +205,6 @@ export default function FlightMap() {
     }
   }
 
-  // Clear any drawn trajectory (deselect).
-  function clearTrajectory() {
-    const src = mapRef.current?.getSource("trajectory") as
-      | GeoJSONSource
-      | undefined;
-    src?.setData({ type: "FeatureCollection", features: [] });
-  }
-
-  // Render a path into the `trajectory` source: the rainbow line plus a dot at
-  // its start.
-  function setTrajectory(path: [number, number][]) {
-    const map = mapRef.current;
-    const src = map?.getSource("trajectory") as GeoJSONSource | undefined;
-    if (!map || !src || path.length < 2) {
-      clearTrajectory();
-      return;
-    }
-    src.setData({
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: path },
-          properties: {},
-        },
-        {
-          type: "Feature",
-          geometry: { type: "Point", coordinates: path[0] },
-          properties: {},
-        },
-      ],
-    });
-  }
-
-  function setTrajectoryLoading(loading: boolean) {
-    trajectoryLoadingRef.current = loading;
-    const map = mapRef.current;
-    if (!map || !map.getLayer("trajectory-line")) return;
-    map.setPaintProperty("trajectory-line", "line-opacity", loading ? 0.35 : 1);
-    map.setPaintProperty(
-      "trajectory-line",
-      "line-dasharray",
-      loading ? [0.6, 1.4] : undefined
-    );
-    map.setPaintProperty(
-      "trajectory-glow",
-      "line-opacity",
-      loading ? 0.12 : 0.3
-    );
-  }
-
-  // Great-circle placeholder from the origin airport to the current position.
-  function drawTrajectory(
-    originIata: string | null,
-    current: [number, number]
-  ) {
-    const origin = originIata ? airportsRef.current[originIata] : undefined;
-    if (!origin) {
-      clearTrajectory();
-      return;
-    }
-    setTrajectory(greatCircle(origin, current));
-  }
-
-  // Select a plane: open sidebar, draw the great-circle placeholder + fly to it,
-  // then fetch the real flown path and replace the placeholder when it arrives.
-  function selectPlane(p: StateVector) {
-    const map = mapRef.current;
-    setSelected(p);
-    setSelectedAirport(null);
-    setSidebarTab("flight");
-    setHistory(null);
-    historyTripRef.current = p.trip_id;
-    selectedIcaoRef.current = p.icao24;
-    predictedRef.current = null;
-    setAccuracyKm(null);
-    setReplaying(false);
-    setReplayT(0);
-
-    // Base path behind the plane: great-circle placeholder from origin airport
-    // to current pos (replaced by the real flown path once /api/history lands).
-    const origin = p.origin_iata
-      ? airportsRef.current[p.origin_iata]
-      : undefined;
-    basePathRef.current = origin
-      ? greatCircle(origin, [p.longitude, p.latitude])
-      : [];
-    drawTrajectory(p.origin_iata, [p.longitude, p.latitude]);
-    setTrajectoryLoading(true);
-
-    // Origin / destination airport pins (whichever resolve in the lookup).
-    const endpointFeats: GeoJSON.Feature<GeoJSON.Point>[] = [];
-    for (const iata of [p.origin_iata, p.destination_iata]) {
-      const coord = iata ? airportsRef.current[iata] : undefined;
-      if (coord) {
-        endpointFeats.push({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: coord },
-          properties: { iata },
-        });
-      }
-    }
-    (map?.getSource("endpoints") as GeoJSONSource | undefined)?.setData({
-      type: "FeatureCollection",
-      features: endpointFeats,
-    });
-
-    // Swap the static icon for the selected plane icon while selected: hide
-    // this plane in the symbol layer and float an HTML marker in its place.
-    selectedMarkerRef.current?.remove();
-    if (map) {
-      if (map.getLayer("planes")) {
-        map.setFilter("planes", ["!=", ["get", "icao24"], p.icao24]);
-      }
-      const wrap = document.createElement("div");
-      wrap.style.cssText = "pointer-events:none;line-height:0";
-      const img = document.createElement("img");
-      img.src = SELECTED_PLANE_ICON_SRC;
-      img.alt = "";
-      img.style.cssText = `height:${SELECTED_PLANE_ICON_H}px;width:${SELECTED_PLANE_ICON_W}px;display:block;`;
-      wrap.appendChild(img);
-      selectedMarkerRef.current = new maplibregl.Marker({
-        element: wrap,
-        anchor: "center",
-      })
-        .setLngLat([p.longitude, p.latitude])
-        .addTo(map);
-    }
-
-    // Draw the green dotted line to destination airport
-    const destCoord = p.destination_iata
-      ? airportsRef.current[p.destination_iata]
-      : undefined;
-    const destSrc = map?.getSource("destination-path") as
-      | GeoJSONSource
-      | undefined;
-    if (destSrc) {
-      if (destCoord) {
-        destSrc.setData({
-          type: "FeatureCollection",
-          features: [
-            {
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: greatCircle([p.longitude, p.latitude], destCoord),
-              },
-              properties: {},
-            },
-          ],
-        });
-      } else {
-        destSrc.setData({ type: "FeatureCollection", features: [] });
-      }
-    }
-
-    map?.flyTo({
-      center: [p.longitude, p.latitude],
-      zoom: Math.max(map.getZoom(), 7),
-    });
-    if (!p.trip_id) {
-      setTrajectoryLoading(false);
-      return;
-    }
-    loadHistory(p.trip_id).then((h) => {
-      if (historyTripRef.current !== p.trip_id) return;
-      setHistory(h);
-      if (h.path.length >= 2) {
-        const smoothed = smoothPath(h.path, 4);
-        basePathRef.current = smoothed;
-        setTrajectory(smoothed);
-      }
-      setTrajectoryLoading(false);
-    });
-  }
-
-  // Deselect: close sidebar + clear trajectory, reset line style for next pick.
-  function deselectPlane() {
-    setSelected(null);
-    setHistory(null);
-    historyTripRef.current = null;
-    selectedIcaoRef.current = null;
-    basePathRef.current = [];
-    setTrajectoryLoading(false);
-    selectedMarkerRef.current?.remove();
-    selectedMarkerRef.current = null;
-    // Restore the static icon for the deselected plane.
-    if (mapRef.current?.getLayer("planes")) {
-      mapRef.current.setFilter("planes", null);
-    }
-    clearTrajectory();
-    (
-      mapRef.current?.getSource("destination-path") as GeoJSONSource | undefined
-    )?.setData({ type: "FeatureCollection", features: [] });
-    (
-      mapRef.current?.getSource("prediction") as GeoJSONSource | undefined
-    )?.setData({ type: "FeatureCollection", features: [] });
-    (
-      mapRef.current?.getSource("turn-marker") as GeoJSONSource | undefined
-    )?.setData({ type: "FeatureCollection", features: [] });
-    (
-      mapRef.current?.getSource("endpoints") as GeoJSONSource | undefined
-    )?.setData({ type: "FeatureCollection", features: [] });
-    setFollow(false);
-    followRef.current = false;
-    predictedRef.current = null;
-    setAccuracyKm(null);
-    setReplaying(false);
-    setReplayT(0);
-  }
-
-  // Select an airport from the sidebar list: mirrors the map's airport-dot
-  // click handler (close the plane sidebar first, then fly to it).
-  function selectAirportFromList(a: Airport) {
-    deselectPlane();
-    setSelectedAirport(a);
-    setAirportBoardTab("departure");
-    const map = mapRef.current;
-    if (map) {
-      map.flyTo({
-        center: [a.longitude_deg, a.latitude_deg],
-        zoom: Math.max(map.getZoom(), 8),
-      });
-    }
-  }
-
-  // Derive each plane's turn rate (signed deg/s) by diffing its heading against
-  // the previous sample. Clamped to ±3 deg/s (airliner standard-rate ceiling) to
-  // reject heading jitter. Refreshes only when a newer position timestamp lands.
   function updateTurnRates(list: StateVector[]) {
     for (const p of list) {
       if (typeof p.true_track !== "number") continue;
@@ -1066,7 +820,7 @@ export default function FlightMap() {
               : undefined;
           if (full) {
             // Close the airport sidebar first so the two panels never overlap.
-            setSelectedAirport(null);
+            deselectAirport();
             selectPlane(full);
           }
         });
@@ -1078,7 +832,7 @@ export default function FlightMap() {
           });
           if (!hits.length) {
             deselectPlane();
-            setSelectedAirport(null);
+            deselectAirport();
           }
         });
         map.on("mouseenter", "planes", () => {
@@ -1318,141 +1072,14 @@ export default function FlightMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Draw the replay head at the current scrub position along the selected trip's
-  // recorded path (empty when there's no path).
-  useEffect(() => {
-    const src = mapRef.current?.getSource("replay") as
-      | GeoJSONSource
-      | undefined;
-    if (!src) return;
-    const path = history?.path;
-    const smoothed = path && path.length >= 2 ? smoothPath(path, 4) : null;
-    const pt = smoothed ? pointAlong(smoothed, replayT) : null;
-    src.setData({
-      type: "FeatureCollection",
-      features: pt
-        ? [
-            {
-              type: "Feature",
-              geometry: { type: "Point", coordinates: pt },
-              properties: {},
-            },
-          ]
-        : [],
-    });
-  }, [replayT, history]);
 
-  // Highlight the selected airport on the map — swap its icon and hide the
-  // base marker underneath, mirroring the selected-plane icon swap.
-  useEffect(() => {
-    const map = mapRef.current;
-    const src = map?.getSource("selected-airport") as GeoJSONSource | undefined;
-    if (!map || !src) return;
-
-    if (map.getLayer("airport-dot")) {
-      map.setFilter(
-        "airport-dot",
-        selectedAirport
-          ? ["!=", ["get", "icao"], selectedAirport.icao_code ?? ""]
-          : null
-      );
-    }
-
-    src.setData({
-      type: "FeatureCollection",
-      features: selectedAirport
-        ? [
-            {
-              type: "Feature",
-              geometry: {
-                type: "Point",
-                coordinates: [
-                  selectedAirport.longitude_deg,
-                  selectedAirport.latitude_deg,
-                ],
-              },
-              properties: {},
-            },
-          ]
-        : [],
-    });
-  }, [selectedAirport]);
-
-  // Fetch arrivals/departures for the selected airport whenever the airport
-  // or the arrival/departure tab changes.
-  useEffect(() => {
-    const iata = selectedAirport?.iata_code;
-    if (!iata) return; // nothing to fetch; `schedule` derives to [] on its own
-
-    let cancelled = false;
-    const type = airportBoardTab === "arrival" ? "A" : "D";
-    const key = `${iata}-${type}`;
-
-    loadSchedule(iata, type, 50)
-      .then((entries) => {
-        if (!cancelled) setScheduleData({ key, entries });
-      })
-      .catch((err) => {
-        console.error("[schedule]", err);
-        if (!cancelled) setScheduleData({ key, entries: [] });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedAirport, airportBoardTab]);
-
-  // Auto-play the replay: advance the scrubber ~5s end-to-end, stop at the end.
-  useEffect(() => {
-    if (!replaying) return;
-    const id = setInterval(() => {
-      setReplayT((t) => {
-        const nt = t + 0.02;
-        if (nt >= 1) {
-          setReplaying(false);
-          return 1;
-        }
-        return nt;
-      });
-    }, 100);
-    return () => clearInterval(id);
-  }, [replaying]);
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const expected = KONAMI_CODE[konamiIndexRef.current];
-      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (key === expected) {
-        konamiIndexRef.current += 1;
-        if (konamiIndexRef.current === KONAMI_CODE.length) {
-          konamiIndexRef.current = 0;
-          setChaosMode(true);
-          setTimeout(() => setChaosMode(false), 10_000);
-        }
-      } else {
-        konamiIndexRef.current = key === KONAMI_CODE[0] ? 1 : 0;
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  useKonamiCode(() => {
+    setChaosMode(true);
+    setTimeout(() => setChaosMode(false), 10_000);
+  });
 
   // Live WIB clock for the HUD, ticking every second.
-  useEffect(() => {
-    function tick() {
-      const wib = new Date(Date.now() + 7 * 3600 * 1000);
-      const pad = (n: number) => String(n).padStart(2, "0");
-      setNowWib(
-        `${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}:${pad(
-          wib.getUTCSeconds()
-        )}`
-      );
-    }
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
-
+  const nowWib = useWibClock();
   // Chaos mode visuals: bigger pulsing planes + rainbow-cycled airport icons.
   // Chaos mode visuals: bigger pulsing planes + nyan-cat icon swap.
   useEffect(() => {
@@ -1659,10 +1286,6 @@ export default function FlightMap() {
       <ConflictBadge conflictCount={conflictCount} />
       <ClockBadge nowWib={nowWib} />
 
-      <div className="pointer-events-none absolute left-1/2 top-14 z-10 -translate-x-1/2 rounded-md border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-mono font-medium text-white/85 backdrop-blur">
-        {nowWib} <span className="text-white/40">WIB</span>
-      </div>
-
       <BasemapSwitcher
         basemap={basemap}
         onSelectBasemap={selectBasemap}
@@ -1725,7 +1348,7 @@ export default function FlightMap() {
                     ? "Sorting: Newest First (Desc)"
                     : "Sorting: Oldest First (Asc)"
                 }
-                className="rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 hover:bg-white/10 hover:border-white/25 focus:outline-none flex items-center justify-center font-medium shrink-0 min-w-[2.5rem]"
+                className="rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 hover:bg-white/10 hover:border-white/25 focus:outline-none flex items-center justify-center font-medium shrink-0 min-w-10"
               >
                 <span>{sortDesc ? "↓" : "↑"}</span>
               </button>
@@ -1877,11 +1500,7 @@ export default function FlightMap() {
             <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
-                onClick={() => {
-                  const v = !follow;
-                  setFollow(v);
-                  followRef.current = v;
-                }}
+                onClick={toggleFollow}
                 aria-pressed={follow}
                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                   follow
@@ -1954,7 +1573,7 @@ export default function FlightMap() {
                       style={{ width: `${progress.pct}%` }}
                     />
                     <span
-                      className="absolute -top-[7px] -translate-x-1/2 text-[13px]"
+                      className="absolute -top-1.75 -translate-x-1/2 text-[13px]"
                       style={{ left: `${progress.pct}%` }}
                     >
                       ✈
@@ -2054,7 +1673,7 @@ export default function FlightMap() {
             </div>
             <button
               type="button"
-              onClick={() => setSelectedAirport(null)}
+              onClick={deselectAirport}
               aria-label="Close"
               className="shrink-0 rounded px-1.5 text-base leading-none text-white/60 hover:bg-white/10 hover:text-white"
             >
@@ -2070,7 +1689,7 @@ export default function FlightMap() {
                 alt="Airport"
                 className="w-full h-full object-cover opacity-75"
               />
-              <div className="absolute inset-0 flex flex-col justify-end p-2 bg-gradient-to-t from-black/70 via-transparent">
+              <div className="absolute inset-0 flex flex-col justify-end p-2 bg-linear-to-t from-black/70 via-transparent">
                 <span className="text-[11px] font-semibold text-white leading-tight">
                   {selectedAirport.name}
                 </span>
