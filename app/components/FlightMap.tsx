@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import maplibregl, {
-  type GeoJSONSource,
-} from "maplibre-gl";
+import maplibregl, { type GeoJSONSource } from "maplibre-gl";
 import { loadPlanes } from "@/lib/planes";
 import { loadHistory } from "@/lib/history";
 import { loadAirports } from "@/lib/airports";
 import { loadSchedule } from "@/lib/schedule";
 import type { ScheduleEntry } from "@/lib/types";
 import type { StateVector, TripHistory, Airport } from "@/lib/types";
+
 import {
   angDelta,
   greatCircle,
@@ -33,6 +32,13 @@ import {
   SELECTED_PLANE_ICON_H,
 } from "@/lib/mapConstants";
 import { BASE_STYLE, setBasemap } from "@/lib/mapStyle";
+
+import ClockBadge from "@/components/flight-map/ClockBadge";
+import ConflictBadge from "@/components/flight-map/ConflictBadge";
+import ChaosOverlay from "@/components/flight-map/ChaosOverlay";
+import AttributionFooter from "@/components/flight-map/AttributionFooter";
+import BasemapSwitcher from "@/components/flight-map/BasemapSwitcher";
+
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -47,7 +53,6 @@ import { BASE_STYLE, setBasemap } from "@/lib/mapStyle";
  * All tile sources are free and need no API key. Planes are one WebGL symbol
  * layer (scales to thousands) rotated by heading, always drawn on top.
  */
-
 
 function planesToGeoJSON(
   planes: StateVector[]
@@ -154,20 +159,26 @@ export default function FlightMap() {
 
   const [nowWib, setNowWib] = useState<string>("");
 
-  const [airportBoardTab, setAirportBoardTab] = useState<"arrival" | "departure">("departure");
+  const [airportBoardTab, setAirportBoardTab] = useState<
+    "arrival" | "departure"
+  >("departure");
   const [scheduleData, setScheduleData] = useState<{
     key: string;
     entries: ScheduleEntry[];
   } | null>(null);
 
   const scheduleKey = selectedAirport?.iata_code
-    ? `${selectedAirport.iata_code}-${airportBoardTab === "arrival" ? "A" : "D"}`
+    ? `${selectedAirport.iata_code}-${
+        airportBoardTab === "arrival" ? "A" : "D"
+      }`
     : null;
   const schedule =
-    scheduleData && scheduleData.key === scheduleKey ? scheduleData.entries : [];
+    scheduleData && scheduleData.key === scheduleKey
+      ? scheduleData.entries
+      : [];
 
-  const scheduleLoading = scheduleKey !== null && (!scheduleData || scheduleData.key !== scheduleKey);
-
+  const scheduleLoading =
+    scheduleKey !== null && (!scheduleData || scheduleData.key !== scheduleKey);
 
   function selectBasemap(mode: Basemap) {
     setBasemapState(mode);
@@ -375,17 +386,16 @@ export default function FlightMap() {
       setTrajectoryLoading(false);
       return;
     }
-    loadHistory(p.trip_id)
-      .then((h) => {
-        if (historyTripRef.current !== p.trip_id) return;
-        setHistory(h);
-        if (h.path.length >= 2) {
-          const smoothed = smoothPath(h.path, 4);
-          basePathRef.current = smoothed;
-          setTrajectory(smoothed);
-        }
-        setTrajectoryLoading(false);
-      })
+    loadHistory(p.trip_id).then((h) => {
+      if (historyTripRef.current !== p.trip_id) return;
+      setHistory(h);
+      if (h.path.length >= 2) {
+        const smoothed = smoothPath(h.path, 4);
+        basePathRef.current = smoothed;
+        setTrajectory(smoothed);
+      }
+      setTrajectoryLoading(false);
+    });
   }
 
   // Deselect: close sidebar + clear trajectory, reset line style for next pick.
@@ -1170,24 +1180,25 @@ export default function FlightMap() {
           const ppathRaw = sel.on_ground
             ? []
             : predictPath(
-              sel.longitude,
-              sel.latitude,
-              sel.velocity,
-              sel.true_track,
-              omega
-            );
-          const ppath = ppathRaw.length >= 3 ? smoothPath(ppathRaw, 1) : ppathRaw;
+                sel.longitude,
+                sel.latitude,
+                sel.velocity,
+                sel.true_track,
+                omega
+              );
+          const ppath =
+            ppathRaw.length >= 3 ? smoothPath(ppathRaw, 1) : ppathRaw;
           pred?.setData({
             type: "FeatureCollection",
             features:
               ppath.length >= 2
                 ? [
-                  {
-                    type: "Feature",
-                    geometry: { type: "LineString", coordinates: ppath },
-                    properties: {},
-                  },
-                ]
+                    {
+                      type: "Feature",
+                      geometry: { type: "LineString", coordinates: ppath },
+                      properties: {},
+                    },
+                  ]
                 : [],
           });
 
@@ -1200,12 +1211,12 @@ export default function FlightMap() {
             type: "FeatureCollection",
             features: turning
               ? [
-                {
-                  type: "Feature",
-                  geometry: { type: "Point", coordinates: head },
-                  properties: {},
-                },
-              ]
+                  {
+                    type: "Feature",
+                    geometry: { type: "Point", coordinates: head },
+                    properties: {},
+                  },
+                ]
               : [],
           });
 
@@ -1320,7 +1331,13 @@ export default function FlightMap() {
     src.setData({
       type: "FeatureCollection",
       features: pt
-        ? [{ type: "Feature", geometry: { type: "Point", coordinates: pt }, properties: {} }]
+        ? [
+            {
+              type: "Feature",
+              geometry: { type: "Point", coordinates: pt },
+              properties: {},
+            },
+          ]
         : [],
     });
   }, [replayT, history]);
@@ -1345,18 +1362,18 @@ export default function FlightMap() {
       type: "FeatureCollection",
       features: selectedAirport
         ? [
-          {
-            type: "Feature",
-            geometry: {
-              type: "Point",
-              coordinates: [
-                selectedAirport.longitude_deg,
-                selectedAirport.latitude_deg,
-              ],
+            {
+              type: "Feature",
+              geometry: {
+                type: "Point",
+                coordinates: [
+                  selectedAirport.longitude_deg,
+                  selectedAirport.latitude_deg,
+                ],
+              },
+              properties: {},
             },
-            properties: {},
-          },
-        ]
+          ]
         : [],
     });
   }, [selectedAirport]);
@@ -1487,12 +1504,6 @@ export default function FlightMap() {
     return () => cancelAnimationFrame(raf);
   }, [chaosMode]);
 
-  const modes: { id: Basemap; label: string }[] = [
-    { id: "streets", label: "Streets" },
-    { id: "dark", label: "Dark" },
-    { id: "satellite", label: "Satellite" },
-  ];
-
   // Label/value rows for the detail sidebar (nulls filtered out at render).
   const ft = (m: number | null) =>
     typeof m === "number"
@@ -1551,57 +1562,57 @@ export default function FlightMap() {
 
   const flightDetailRows: [string, string | null][] = selected
     ? [
-      ["Status", selected.flight_status],
-      ["From", selected.origin_iata],
-      ["To", selected.destination_iata],
-      ["Dep (sched)", fmtSched(selected.scheduled_departure)],
-      ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
-      ["ETA", eta],
-      [
-        "Forecast err",
-        accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
-      ],
-      ["Altitude", ft(selected.baro_altitude)],
-      [
-        "Speed",
-        typeof selected.velocity === "number"
-          ? `${Math.round(selected.velocity * 1.944)} kts`
-          : null,
-      ],
-      [
-        "Heading",
-        typeof selected.true_track === "number"
-          ? `${Math.round(selected.true_track)}°`
-          : null,
-      ],
-      [
-        "Position",
-        `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
-      ],
-      ["Updated", timeAgo(selected.last_time_position) || null],
-      // Trip-history extras (present once /api/history resolves for this trip).
-      ["Max alt", history ? ft(history.max_altitude) : null],
-      [
-        "Max speed",
-        typeof history?.max_velocity === "number"
-          ? `${Math.round(history.max_velocity * 1.944)} kts`
-          : null,
-      ],
-      ["Trip start", history ? fmtSched(history.trip_start_time) : null],
-      ["Trip end", history ? fmtSched(history.trip_end_time) : null],
-    ]
+        ["Status", selected.flight_status],
+        ["From", selected.origin_iata],
+        ["To", selected.destination_iata],
+        ["Dep (sched)", fmtSched(selected.scheduled_departure)],
+        ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
+        ["ETA", eta],
+        [
+          "Forecast err",
+          accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
+        ],
+        ["Altitude", ft(selected.baro_altitude)],
+        [
+          "Speed",
+          typeof selected.velocity === "number"
+            ? `${Math.round(selected.velocity * 1.944)} kts`
+            : null,
+        ],
+        [
+          "Heading",
+          typeof selected.true_track === "number"
+            ? `${Math.round(selected.true_track)}°`
+            : null,
+        ],
+        [
+          "Position",
+          `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
+        ],
+        ["Updated", timeAgo(selected.last_time_position) || null],
+        // Trip-history extras (present once /api/history resolves for this trip).
+        ["Max alt", history ? ft(history.max_altitude) : null],
+        [
+          "Max speed",
+          typeof history?.max_velocity === "number"
+            ? `${Math.round(history.max_velocity * 1.944)} kts`
+            : null,
+        ],
+        ["Trip start", history ? fmtSched(history.trip_start_time) : null],
+        ["Trip end", history ? fmtSched(history.trip_end_time) : null],
+      ]
     : [];
 
   const aircraftDetailRows: [string, string | null][] = selected
     ? [
-      ["Aircraft", selected.model],
-      ["Type", selected.typecode],
-      ["Maker", selected.manufacturername],
-      ["Registration", selected.registration],
-      ["Airline/Owner", selected.owner ?? selected.operator_callsign],
-      ["ICAO24", selected.icao24],
-      ["Country", selected.origin_country || null],
-    ]
+        ["Aircraft", selected.model],
+        ["Type", selected.typecode],
+        ["Maker", selected.manufacturername],
+        ["Registration", selected.registration],
+        ["Airline/Owner", selected.owner ?? selected.operator_callsign],
+        ["ICAO24", selected.icao24],
+        ["Country", selected.origin_country || null],
+      ]
     : [];
 
   // Flights-list filter: case-insensitive substring across the fields a user
@@ -1609,27 +1620,27 @@ export default function FlightMap() {
   const q = query.trim().toLowerCase();
   const filteredPlanes = q
     ? planeList.filter((p) =>
-      [
-        p.callsign,
-        p.owner,
-        p.operator_callsign,
-        p.origin_iata,
-        p.destination_iata,
-        p.icao24,
-      ]
-        .filter(Boolean)
-        .some((v) => (v as string).toLowerCase().includes(q))
-    )
+        [
+          p.callsign,
+          p.owner,
+          p.operator_callsign,
+          p.origin_iata,
+          p.destination_iata,
+          p.icao24,
+        ]
+          .filter(Boolean)
+          .some((v) => (v as string).toLowerCase().includes(q))
+      )
     : planeList;
 
   const aq = airportQuery.trim().toLowerCase();
   const filteredAirports = (
     aq
       ? airportList.filter((a) =>
-        [a.name, a.iata_code, a.icao_code, a.iso_country]
-          .filter(Boolean)
-          .some((v) => (v as string).toLowerCase().includes(aq))
-      )
+          [a.name, a.iata_code, a.icao_code, a.iso_country]
+            .filter(Boolean)
+            .some((v) => (v as string).toLowerCase().includes(aq))
+        )
       : airportList
   ).filter((a) => !a.name.startsWith("[Duplicate]"));
 
@@ -1644,84 +1655,22 @@ export default function FlightMap() {
         style={{ position: "absolute", inset: 0 }}
       />
 
-      {chaosMode && (
-        <>
-          <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
-            <div className="chaos-starfield" />
-          </div>
-          <div
-            className="pointer-events-none absolute inset-0 disco-overlay"
-            style={{ zIndex: 15 }}
-          />
-          <div className="pointer-events-none absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-fuchsia-300/50 bg-black/70 px-4 py-1.5 backdrop-blur">
-            <img
-              src="/icons/nyan-cat.gif"
-              alt=""
-              className="h-6 w-6 shrink-0"
-            />
-            <span
-              className="text-xs font-bold tracking-wide text-transparent"
-              style={{
-                backgroundImage:
-                  "linear-gradient(90deg, #ff2b2b, #ff9500, #ffe600, #33dd33, #00a3ff, #8a2be2)",
-                WebkitBackgroundClip: "text",
-                backgroundClip: "text",
-              }}
-            >
-              CHAOS MODE ACTIVATED
-            </span>
-            <img
-              src="/icons/nyan-cat.gif"
-              alt=""
-              className="h-6 w-6 shrink-0 -scale-x-100"
-            />
-          </div>
-        </>
-      )}
-      {conflictCount > 0 && (
-        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border border-red-400/40 bg-red-950/70 px-3 py-1 text-xs font-semibold text-red-200 backdrop-blur">
-          ⚠ {conflictCount} near-miss {conflictCount === 1 ? "pair" : "pairs"}
-        </div>
-      )}
+      <ChaosOverlay active={chaosMode} />
+      <ConflictBadge conflictCount={conflictCount} />
+      <ClockBadge nowWib={nowWib} />
+
       <div className="pointer-events-none absolute left-1/2 top-14 z-10 -translate-x-1/2 rounded-md border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-mono font-medium text-white/85 backdrop-blur">
         {nowWib} <span className="text-white/40">WIB</span>
       </div>
-      <div className="absolute left-4 top-4 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
-        {modes.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => selectBasemap(m.id)}
-            className={`px-3 py-1.5 transition-colors ${basemap === m.id
-              ? "bg-white/90 text-black"
-              : "text-white/80 hover:bg-white/10"
-              }`}
-          >
-            {m.label}
-          </button>
-        ))}
 
-        <button
-          type="button"
-          onClick={togglePlanes}
-          className={`px-3 py-1.5 transition-colors ${showPlanes
-            ? "bg-white/90 text-black"
-            : "text-white/80 hover:bg-white/10"
-            }`}
-        >
-          ✈
-        </button>
-        <button
-          type="button"
-          onClick={toggleAirports}
-          className={`px-3 py-1.5 transition-colors ${showAirports
-            ? "bg-white/90 text-black"
-            : "text-white/80 hover:bg-white/10"
-            }`}
-        >
-          🏢
-        </button>
-      </div>
+      <BasemapSwitcher
+        basemap={basemap}
+        onSelectBasemap={selectBasemap}
+        showPlanes={showPlanes}
+        onTogglePlanes={togglePlanes}
+        showAirports={showAirports}
+        onToggleAirports={toggleAirports}
+      />
 
       {/* Floating list of planes currently on the map. */}
       {/* Floating list of planes/airports currently on the map. */}
@@ -1730,20 +1679,22 @@ export default function FlightMap() {
           <button
             type="button"
             onClick={() => setPanelTab("flights")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "flights"
-              ? "border-sky-500 text-white bg-white/5"
-              : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
+              panelTab === "flights"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
           >
             Flights ({planeList.length})
           </button>
           <button
             type="button"
             onClick={() => setPanelTab("airports")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "airports"
-              ? "border-sky-500 text-white bg-white/5"
-              : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
+              panelTab === "airports"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
           >
             Airports ({airportList.length})
           </button>
@@ -1795,8 +1746,8 @@ export default function FlightMap() {
                   const alt =
                     typeof p.baro_altitude === "number"
                       ? `${Math.round(
-                        p.baro_altitude * 3.281
-                      ).toLocaleString()} ft`
+                          p.baro_altitude * 3.281
+                        ).toLocaleString()} ft`
                       : "—";
                   const spd =
                     typeof p.velocity === "number"
@@ -1804,8 +1755,9 @@ export default function FlightMap() {
                       : "—";
                   const route =
                     p.origin_iata || p.destination_iata
-                      ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
-                      }`
+                      ? `${p.origin_iata ?? "???"} → ${
+                          p.destination_iata ?? "???"
+                        }`
                       : null;
                   const ago = timeAgo(p.last_time_position);
                   const meta = [p.flight_status, ago]
@@ -1816,14 +1768,16 @@ export default function FlightMap() {
                       <button
                         type="button"
                         onClick={() => selectPlane(p)}
-                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selected?.icao24 === p.icao24 ? "bg-sky-500/20" : ""
-                          }`}
+                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
+                          selected?.icao24 === p.icao24 ? "bg-sky-500/20" : ""
+                        }`}
                       >
                         <span className="flex w-full items-center justify-between gap-2">
                           <span className="flex items-center gap-1.5 truncate">
                             <span
-                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                                }`}
+                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                                p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                              }`}
                             />
                             <span className="truncate font-medium text-white/90">
                               {cs}
@@ -1861,18 +1815,20 @@ export default function FlightMap() {
             <ul className="divide-y divide-white/5 overflow-y-auto">
               {filteredAirports.map((a, i) => (
                 <li
-                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${a.latitude_deg
-                    }-${a.longitude_deg}-${i}`}
+                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${
+                    a.latitude_deg
+                  }-${a.longitude_deg}-${i}`}
                 >
                   {" "}
                   <button
                     type="button"
                     onClick={() => selectAirportFromList(a)}
-                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedAirport?.icao_code === a.icao_code &&
+                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
+                      selectedAirport?.icao_code === a.icao_code &&
                       selectedAirport?.name === a.name
-                      ? "bg-sky-500/20"
-                      : ""
-                      }`}
+                        ? "bg-sky-500/20"
+                        : ""
+                    }`}
                   >
                     <span className="flex w-full items-center justify-between gap-2">
                       <span className="truncate font-medium text-white/90">
@@ -1903,8 +1859,9 @@ export default function FlightMap() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span
-                  className={`inline-block h-2 w-2 shrink-0 rounded-full ${selected.on_ground ? "bg-white/40" : "bg-emerald-400"
-                    }`}
+                  className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                    selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+                  }`}
                 />
                 <span className="truncate text-sm font-semibold text-white">
                   {(selected.callsign ?? "").trim() || selected.icao24}
@@ -1926,10 +1883,11 @@ export default function FlightMap() {
                   followRef.current = v;
                 }}
                 aria-pressed={follow}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${follow
-                  ? "bg-sky-500/80 text-white"
-                  : "bg-white/10 text-white/70 hover:bg-white/20"
-                  }`}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  follow
+                    ? "bg-sky-500/80 text-white"
+                    : "bg-white/10 text-white/70 hover:bg-white/20"
+                }`}
               >
                 Follow
               </button>
@@ -1947,20 +1905,22 @@ export default function FlightMap() {
             <button
               type="button"
               onClick={() => setSidebarTab("flight")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${sidebarTab === "flight"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
+                sidebarTab === "flight"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
             >
               Flight
             </button>
             <button
               type="button"
               onClick={() => setSidebarTab("aircraft")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${sidebarTab === "aircraft"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
+                sidebarTab === "aircraft"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
             >
               Aircraft
             </button>
@@ -2137,15 +2097,18 @@ export default function FlightMap() {
                   "Type",
                   selectedAirport.type
                     ? selectedAirport.type
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (c) => c.toUpperCase())
+                        .replace(/_/g, " ")
+                        .replace(/\b\w/g, (c) => c.toUpperCase())
                     : null,
                 ],
               ] as [string, string | null][]
             )
               .filter(([, v]) => v)
               .map(([label, value]) => (
-                <div key={label} className="flex justify-between gap-3 px-3 py-1.5">
+                <div
+                  key={label}
+                  className="flex justify-between gap-3 px-3 py-1.5"
+                >
                   <dt className="shrink-0 text-white/45">{label}</dt>
                   <dd className="truncate text-right text-white/90">{value}</dd>
                 </div>
@@ -2157,20 +2120,22 @@ export default function FlightMap() {
             <button
               type="button"
               onClick={() => setAirportBoardTab("departure")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "departure"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
+                airportBoardTab === "departure"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
             >
               Departures
             </button>
             <button
               type="button"
               onClick={() => setAirportBoardTab("arrival")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "arrival"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
+                airportBoardTab === "arrival"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
             >
               Arrivals
             </button>
@@ -2179,10 +2144,14 @@ export default function FlightMap() {
           {/* Schedule list — the only scrolling region now */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             {scheduleLoading && (
-              <div className="px-3 py-4 text-center text-white/40">Loading…</div>
+              <div className="px-3 py-4 text-center text-white/40">
+                Loading…
+              </div>
             )}
             {!scheduleLoading && schedule.length === 0 && (
-              <div className="px-3 py-4 text-center text-white/40">No flights found.</div>
+              <div className="px-3 py-4 text-center text-white/40">
+                No flights found.
+              </div>
             )}
             {!scheduleLoading && schedule.length > 0 && (
               <ul className="divide-y divide-white/5">
@@ -2191,7 +2160,9 @@ export default function FlightMap() {
                   const route = s.route_airport_iata ?? "???";
                   return (
                     <li
-                      key={`${s.flight_no ?? s.callsign ?? i}-${s.sched_time ?? i}`}
+                      key={`${s.flight_no ?? s.callsign ?? i}-${
+                        s.sched_time ?? i
+                      }`}
                       className="flex flex-col gap-0.5 px-3 py-1.5"
                     >
                       {/* Row 1: Flight_no | Airline name */}
@@ -2207,14 +2178,20 @@ export default function FlightMap() {
                       <div className="flex items-center justify-between gap-2 text-[10px]">
                         <span className="text-white/60">{time ?? "—"}</span>
                         {s.board_status && (
-                          <span className={`font-medium ${statusTextClass(s.board_status)}`}>
+                          <span
+                            className={`font-medium ${statusTextClass(
+                              s.board_status
+                            )}`}
+                          >
                             {s.board_status}
                           </span>
                         )}
                       </div>
                       {/* Row 3: From | Target */}
                       <div className="flex items-center justify-between gap-2 text-[10px] text-white/45">
-                        <span>{airportBoardTab === "departure" ? "To" : "From"}</span>
+                        <span>
+                          {airportBoardTab === "departure" ? "To" : "From"}
+                        </span>
                         <span className="truncate">{route}</span>
                       </div>
                     </li>
@@ -2225,17 +2202,7 @@ export default function FlightMap() {
           </div>
         </div>
       )}
-      <div className="pointer-events-none absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black/40 px-2 py-0.5 text-[9px] text-white/40 backdrop-blur-sm">
-        Flight Data By:{" "}
-
-        <a href="https://opensky-network.org/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="pointer-events-auto text-sky-400 underline hover:text-sky-300"
-        >
-          OpenSky Network
-        </a>
-      </div>
-    </div >
+      <AttributionFooter />
+    </div>
   );
 }
