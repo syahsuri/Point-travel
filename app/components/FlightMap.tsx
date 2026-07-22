@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import maplibregl, {
-  type StyleSpecification,
   type GeoJSONSource,
 } from "maplibre-gl";
 import { loadPlanes } from "@/lib/planes";
@@ -22,7 +21,18 @@ import {
 } from "@/lib/geo";
 import { timeAgo, posSecs, fmtSched, statusTextClass } from "@/lib/format";
 
-
+import {
+  type Basemap,
+  INDONESIA_BOUNDS,
+  KONAMI_CODE,
+  PLANE_ICON_SRC,
+  PLANE_ICON_W,
+  PLANE_ICON_H,
+  SELECTED_PLANE_ICON_SRC,
+  SELECTED_PLANE_ICON_W,
+  SELECTED_PLANE_ICON_H,
+} from "@/lib/mapConstants";
+import { BASE_STYLE, setBasemap } from "@/lib/mapStyle";
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -38,210 +48,6 @@ import { timeAgo, posSecs, fmtSched, statusTextClass } from "@/lib/format";
  * layer (scales to thousands) rotated by heading, always drawn on top.
  */
 
-type Basemap = "dark" | "satellite" | "streets";
-
-// Which layers are visible for each basemap. Anything not listed is hidden.
-// Custom text labels belong to Dark only — Satellite (ESRI reference) and
-// Streets (OSM raster) already carry their own place names.
-const DARK_LABELS = ["country-labels", "province-labels", "city-labels"];
-const BASEMAP_LAYERS: Record<Basemap, string[]> = {
-  dark: ["land", "land-outline", ...DARK_LABELS],
-  satellite: ["sat", "sat-ref"],
-  streets: ["osm"],
-};
-
-const ALL_BASEMAP_LAYERS = [
-  "land",
-  "land-outline",
-  "sat",
-  "sat-ref",
-  "osm",
-  ...DARK_LABELS,
-];
-
-function setBasemap(map: maplibregl.Map, mode: Basemap) {
-  if (!map.isStyleLoaded()) return;
-  const visible = new Set(BASEMAP_LAYERS[mode]);
-  for (const id of ALL_BASEMAP_LAYERS) {
-    if (map.getLayer(id)) {
-      map.setLayoutProperty(
-        id,
-        "visibility",
-        visible.has(id) ? "visible" : "none"
-      );
-    }
-  }
-}
-
-// Indonesia bounding box [west, south, east, north] — keeps the view (and the
-// data we care about) scoped small.
-const INDONESIA_BOUNDS: [number, number, number, number] = [94, -11, 141, 7];
-
-const KONAMI_CODE = [
-  "ArrowUp",
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowLeft",
-  "ArrowRight",
-  "b",
-  "a",
-];
-
-// Plane marker asset (public/icons/plane.svg — a side-profile Nyan Cat facing
-// RIGHT at rest). Aspect ~95:57. The art is a character, not a top-down plane,
-// so we keep it upright and flip it horizontally toward the travel direction
-// (see the `plane` / `plane-flip` images) rather than rotating the whole body.
-const PLANE_ICON_SRC = "/icons/plane.png";
-const PLANE_ICON_W = 40;
-const PLANE_ICON_H = 40;
-
-const SELECTED_PLANE_ICON_SRC = "/icons/plane-white.png";
-const SELECTED_PLANE_ICON_W = 40;
-const SELECTED_PLANE_ICON_H = 40;
-
-// One style holds all three basemaps. Raster (satellite/streets) layers start
-// hidden; MapLibre only fetches their tiles once made visible, so the default
-// dark map stays tile-free and light. `planes` is added later, on top of all.
-const BASE_STYLE: StyleSpecification = {
-  version: 8,
-  // Font glyphs so symbol layers can render text (MapLibre demo endpoint, no key).
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-  sources: {
-    world: {
-      type: "geojson",
-      data: "/data/world-110m.geojson",
-    },
-    places: {
-      type: "geojson",
-      data: "/data/id-places.geojson",
-    },
-    provinces: {
-      type: "geojson",
-      data: "/data/id-provinces.geojson",
-    },
-    // ESRI tiles are {z}/{y}/{x}; OSM is {z}/{x}/{y} — order differs, mind it.
-    sat: {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      attribution: "Imagery © Esri",
-    },
-    "sat-ref": {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-    },
-    osm: {
-      type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
-    },
-  },
-  layers: [
-    { id: "sea", type: "background", paint: { "background-color": "#0b1622" } },
-    // Raster basemaps — hidden until selected.
-    {
-      id: "sat",
-      type: "raster",
-      source: "sat",
-      layout: { visibility: "none" },
-    },
-    {
-      id: "sat-ref",
-      type: "raster",
-      source: "sat-ref",
-      layout: { visibility: "none" },
-    },
-    {
-      id: "osm",
-      type: "raster",
-      source: "osm",
-      layout: { visibility: "none" },
-    },
-    // Dark vector basemap — visible by default.
-    {
-      id: "land",
-      type: "fill",
-      source: "world",
-      paint: { "fill-color": "#16283a" },
-    },
-    {
-      id: "land-outline",
-      type: "line",
-      source: "world",
-      paint: { "line-color": "#24425c", "line-width": 0.6 },
-    },
-    // Dark-only place labels (country / province / city). All share a dark halo.
-    {
-      id: "country-labels",
-      type: "symbol",
-      source: "world",
-      layout: {
-        "text-field": ["get", "NAME"],
-        "text-font": ["Noto Sans Bold"],
-        "text-transform": "uppercase",
-        "text-letter-spacing": 0.15,
-        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 6, 16],
-      },
-      paint: {
-        "text-color": "#5f7d94",
-        "text-halo-color": "#0b1622",
-        "text-halo-width": 1.2,
-      },
-    },
-    {
-      id: "province-labels",
-      type: "symbol",
-      source: "provinces",
-      minzoom: 4.5,
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 4.5, 10, 8, 15],
-      },
-      paint: {
-        "text-color": "#8fb3cc",
-        "text-halo-color": "#0b1622",
-        "text-halo-width": 1.2,
-      },
-    },
-    {
-      id: "city-labels",
-      type: "symbol",
-      source: "places",
-      minzoom: 5,
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["Noto Sans Regular"],
-        // Bigger cities (higher pop_max) get larger text.
-        "text-size": [
-          "interpolate",
-          ["linear"],
-          ["get", "pop_max"],
-          50000,
-          10,
-          2000000,
-          15,
-        ],
-        "text-anchor": "top",
-        "text-offset": [0, 0.4],
-      },
-      paint: {
-        "text-color": "#c6dae8",
-        "text-halo-color": "#0b1622",
-        "text-halo-width": 1.2,
-      },
-    },
-  ],
-};
 
 function planesToGeoJSON(
   planes: StateVector[]
