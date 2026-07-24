@@ -659,7 +659,20 @@ export default function FlightMap() {
 
           {sidebarTab === "aircraft" && (
             <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
-              <div className="relative aspect-video w-full overflow-hidden rounded border border-white/10 bg-black/40">
+              <a
+                href={planePhoto?.link ?? undefined}
+                target="_blank"
+                rel="noopener"
+                className="relative aspect-video w-full overflow-hidden rounded border border-white/10 bg-black/40 block"
+                aria-label={
+                  planePhoto
+                    ? `View ${planePhoto.photographer}'s photo on Planespotters`
+                    : undefined
+                }
+                onClick={(e) => {
+                  if (!planePhoto) e.preventDefault();
+                }}
+              >
                 <img
                   src={
                     planePhoto?.thumbnailLarge.src ??
@@ -682,7 +695,7 @@ export default function FlightMap() {
                     No photo available
                   </div>
                 )}
-              </div>
+              </a>
               {planePhoto && (
                 <div className="mt-1 flex items-center justify-between text-[10px] text-white/45">
                   <span>Photo by {planePhoto.photographer}</span>
