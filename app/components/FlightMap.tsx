@@ -14,6 +14,7 @@ import { timeAgo, posSecs, fmtSched, statusTextClass } from "@/lib/format";
 import { type Basemap } from "@/lib/mapConstants";
 import { setBasemap } from "@/lib/mapStyle";
 import { useFlightMapEngine } from "@/lib/hooks/useFlightMapEngine";
+import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
 
 import ClockBadge from "@/components/flight-map/ClockBadge";
 import ConflictBadge from "@/components/flight-map/ConflictBadge";
@@ -243,6 +244,10 @@ export default function FlightMap() {
       remainingKm: remaining / 1000,
     };
   })();
+
+  const { photo: planePhoto, loading: planePhotoLoading } = usePlanePhoto(
+    selected?.icao24
+  );
 
   const flightDetailRows: [string, string | null][] = selected
     ? [
@@ -657,14 +662,42 @@ export default function FlightMap() {
             <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
               <div className="relative aspect-video w-full overflow-hidden rounded border border-white/10 bg-black/40">
                 <img
-                  src="/images/plane-placeholder.png"
-                  alt="Aircraft"
-                  className="w-full h-full object-cover opacity-85"
+                  src={
+                    planePhoto?.thumbnailLarge.src ??
+                    "/images/plane-placeholder.png"
+                  }
+                  alt={
+                    planePhoto
+                      ? `Aircraft photographed by ${planePhoto.photographer}`
+                      : "Aircraft"
+                  }
+                  className="w-full h-full object-cover opacity-90"
                 />
-                <div className="absolute bottom-1 right-2 rounded bg-black/60 px-1 text-[9px] text-white/50">
-                  Placeholder Photo
-                </div>
+                {planePhotoLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] text-white/60">
+                    Loading photo…
+                  </div>
+                )}
+                {!planePhotoLoading && !planePhoto && (
+                  <div className="absolute bottom-1 right-2 rounded bg-black/60 px-1 text-[9px] text-white/50">
+                    No photo available
+                  </div>
+                )}
               </div>
+              {planePhoto && (
+                <div className="mt-1 flex items-center justify-between text-[10px] text-white/45">
+                  <span>Photo by {planePhoto.photographer}</span>
+
+                  <a
+                    href={planePhoto.link}
+                    target="_blank"
+                    rel="noopener"
+                    className="text-sky-400 underline hover:text-sky-300"
+                  >
+                    View on Planespotters
+                  </a>
+                </div>
+              )}
             </div>
           )}
           {sidebarTab === "flight" && history && history.path.length >= 2 && (

@@ -146,3 +146,11 @@ export type ScheduleEntry = {
   board_status: string | null;
   schedule_date: string | null;
 };
+
+export type PlanePhoto = {
+  id: string;
+  thumbnail: { src: string; width: number; height: number };
+  thumbnailLarge: { src: string; width: number; height: number };
+  link: string;
+  photographer: string;
+};
