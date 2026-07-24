@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { loadPlanePhoto } from "@/lib/photos";
 import type { PlanePhoto } from "@/lib/types";
 
-type PhotoState = {
+type Result = {
+  // icao24 this photo/null result corresponds to. Compared against the
+  // current `icao24` argument to derive `loading` and `photo` below,
+  // instead of tracking a separate `loading` field in state (which would
+  // require a synchronous setState call at the top of the effect body).
+  key: string | null | undefined;
   photo: PlanePhoto | null;
-  loading: boolean;
 };
 
 /**
@@ -15,31 +19,19 @@ type PhotoState = {
  * callers should fall back to a placeholder image in all three cases.
  */
 export function usePlanePhoto(icao24: string | null | undefined) {
-  const [state, setState] = useState<PhotoState>({ photo: null, loading: false });
+  const [result, setResult] = useState<Result>({ key: undefined, photo: null });
 
   useEffect(() => {
+    if (!icao24) return;
     let cancelled = false;
-
-    if (!icao24) {
-      // Defer via microtask so this isn't a *synchronous* setState call
-      // inside the effect body (avoids the set-state-in-effect lint rule).
-      queueMicrotask(() => {
-        if (!cancelled) setState({ photo: null, loading: false });
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setState((prev) => ({ ...prev, loading: true }));
 
     loadPlanePhoto(icao24)
       .then((p) => {
-        if (!cancelled) setState({ photo: p, loading: false });
+        if (!cancelled) setResult({ key: icao24, photo: p });
       })
       .catch((err) => {
         console.error("[plane-photo]", err);
-        if (!cancelled) setState({ photo: null, loading: false });
+        if (!cancelled) setResult({ key: icao24, photo: null });
       });
 
     return () => {
@@ -47,5 +39,12 @@ export function usePlanePhoto(icao24: string | null | undefined) {
     };
   }, [icao24]);
 
-  return state;
+  // Stale result from a previous icao24 (or the initial null key) should
+  // never be shown as this plane's photo, and we're "loading" exactly when
+  // we have a target icao24 but haven't resolved a result for it yet.
+  const settled = result.key === icao24;
+  const photo = settled ? result.photo : null;
+  const loading = icao24 != null && !settled;
+
+  return { photo, loading };
 }
