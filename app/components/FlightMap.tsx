@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import maplibregl, { type GeoJSONSource } from "maplibre-gl";
 import type { StateVector, Airport } from "@/lib/types";
 import { useKonamiCode } from "@/lib/hooks/useKonamiCode";
 import { useWibClock } from "@/lib/hooks/useWibClock";
