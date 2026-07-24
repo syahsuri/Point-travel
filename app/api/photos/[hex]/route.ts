@@ -1,10 +1,32 @@
 import type { NextRequest } from "next/server";
 import type { PlanePhoto } from "@/lib/types";
 
+/**
+ * Server-side proxy for Planespotters' public Photo API.
+ *
+ * Per Planespotters' Photo API terms:
+ * - Server-side requests must send a unique, descriptive User-Agent with a
+ *   contact URL (generic library defaults are discouraged/blocked).
+ * - JSON responses may be cached up to 24h — we set Cache-Control accordingly.
+ * - Image binaries must NEVER be downloaded/re-hosted — this route only
+ *   forwards the JSON (with its original, unmodified URLs); the browser
+ *   loads the actual thumbnail images directly from Planespotters' CDN.
+ * - All returned URLs (thumbnail, thumbnail_large, link) must be passed
+ *   through unchanged — no rewriting/proxying.
+ * - This route must not be re-exposed as a general-purpose public API, so
+ *   we restrict it to same-origin requests from our own frontend.
+ */
 export const dynamic = "force-dynamic";
 
+// NOTE: replace with your actual deployed domain/contact per Planespotters'
+// terms — a generic User-Agent may get throttled or blocked.
 const USER_AGENT = "PointTravel/1.0 (https://flight.gukgukcraft.id)";
-const ALLOWED_HOST = "flight.gukgukcraft.id";
+
+// Hosts allowed to call this route. Add localhost so local dev still works.
+const ALLOWED_HOSTS = new Set([
+  "flight.gukgukcraft.id",
+  ...(process.env.NODE_ENV !== "production" ? ["localhost:3000"] : []),
+]);
 
 type RawPhoto = {
   id?: string;
@@ -34,13 +56,11 @@ function toPlanePhoto(r: RawPhoto): PlanePhoto | null {
 }
 
 function isSameOriginRequest(req: NextRequest): boolean {
-  const origin = req.headers.get("origin");
-  const referer = req.headers.get("referer");
-  const candidate = origin ?? referer;
+  const candidate = req.headers.get("origin") ?? req.headers.get("referer");
   if (!candidate) return false;
 
   try {
-    return new URL(candidate).host === ALLOWED_HOST;
+    return ALLOWED_HOSTS.has(new URL(candidate).host);
   } catch {
     return false;
   }
@@ -77,6 +97,7 @@ export async function GET(
     return Response.json(
       { photo },
       {
+        // Terms allow caching the JSON response up to 24h.
         headers: { "Cache-Control": "s-maxage=86400, stale-while-revalidate=3600" },
       }
     );
