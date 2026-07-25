@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "point-travel",
+  title: "Point Travel",
   description: "Live-style flight map (Indonesia)",
 };
 
