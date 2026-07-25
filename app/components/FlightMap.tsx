@@ -74,7 +74,7 @@ export default function FlightMap() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setListOpen(false);
+      setTimeout(() => setListOpen(false), 0);
     }
   }, []);
 
