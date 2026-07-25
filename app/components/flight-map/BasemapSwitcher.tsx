@@ -30,13 +30,13 @@ export default function BasemapSwitcher({
   onToggleAirports,
 }: BasemapSwitcherProps) {
   return (
-    <div className="absolute left-4 top-4 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/50 text-xs font-medium backdrop-blur">
+    <div className="absolute left-2 top-2 md:left-4 md:top-4 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/60 text-[10px] md:text-xs font-medium backdrop-blur shadow-lg">
       {MODES.map((m) => (
         <button
           key={m.id}
           type="button"
           onClick={() => onSelectBasemap(m.id)}
-          className={`px-3 py-1.5 transition-colors ${
+          className={`px-2 py-1.5 md:px-3 transition-colors ${
             basemap === m.id
               ? "bg-white/90 text-black"
               : "text-white/80 hover:bg-white/10"
@@ -49,7 +49,7 @@ export default function BasemapSwitcher({
       <button
         type="button"
         onClick={onTogglePlanes}
-        className={`px-3 py-1.5 transition-colors ${
+        className={`px-2 py-1.5 md:px-3 transition-colors ${
           showPlanes
             ? "bg-white/90 text-black"
             : "text-white/80 hover:bg-white/10"
@@ -60,7 +60,7 @@ export default function BasemapSwitcher({
       <button
         type="button"
         onClick={onToggleAirports}
-        className={`px-3 py-1.5 transition-colors ${
+        className={`px-2 py-1.5 md:px-3 transition-colors ${
           showAirports
             ? "bg-white/90 text-black"
             : "text-white/80 hover:bg-white/10"

@@ -55,7 +55,7 @@ export default function SidePanel({
   onSelectAirport,
 }: SidePanelProps) {
   return (
-    <div className="absolute right-4 top-4 z-10 flex max-h-[calc(100dvh-2rem)] w-64 flex-col overflow-hidden rounded-md border border-white/10 bg-black/55 text-xs backdrop-blur">
+    <div className={`absolute right-2 top-14 md:right-4 md:top-4 z-20 flex max-h-[50vh] md:max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-md border border-white/10 bg-black/80 md:bg-black/55 text-xs backdrop-blur shadow-lg transition-all ${listOpen ? "w-[calc(100vw-1rem)] md:w-80" : "w-auto"}`}>
       <div className="flex items-stretch">
         <button
           type="button"

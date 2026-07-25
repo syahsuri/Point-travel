@@ -8,7 +8,7 @@ type ClockBadgeProps = {
 */
 export default function ClockBadge({ nowWib }: ClockBadgeProps) {
   return (
-    <div className="pointer-events-none absolute left-1/2 top-14 z-10 -translate-x-1/2 rounded-md border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-mono font-medium text-white/85 backdrop-blur">
+    <div className="pointer-events-none absolute left-1/2 bottom-8 z-10 -translate-x-1/2 rounded-md border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-mono font-medium text-white/85 backdrop-blur shadow-lg">
       {nowWib} <span className="text-white/40">WIB</span>
     </div>
   );

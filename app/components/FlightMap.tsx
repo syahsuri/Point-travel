@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import type { StateVector, Airport } from "@/lib/types";
 import { useKonamiCode } from "@/lib/hooks/useKonamiCode";
 import { useWibClock } from "@/lib/hooks/useWibClock";
@@ -71,6 +71,13 @@ export default function FlightMap() {
   const lastApiTimeRef = useRef<number>(0);
 
   const [chaosMode, setChaosMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setListOpen(false);
+    }
+  }, []);
+
   const {
     selected,
     setSelected,
@@ -403,7 +410,7 @@ export default function FlightMap() {
       
       {/* Detail sidebar for the selected airport. */}
       {selectedAirport && (
-        <div className="absolute left-4 top-16 z-10 flex max-h-[calc(100dvh-5rem)] w-72 flex-col overflow-hidden rounded-md border border-sky-400/20 bg-black/70 text-xs text-white/85 backdrop-blur">
+        <div className="absolute z-20 flex flex-col overflow-hidden bg-black/80 md:bg-black/70 text-xs text-white/85 backdrop-blur shadow-2xl transition-all bottom-0 left-0 w-full max-h-[50vh] rounded-t-xl border-t border-white/10 md:bottom-auto md:left-4 md:top-16 md:w-72 md:max-h-[calc(100dvh-5rem)] md:rounded-md md:border md:border-sky-400/20">
           {/* Header */}
           <div className="flex items-start justify-between gap-2 border-b border-white/10 px-3 py-2">
             <div className="min-w-0">

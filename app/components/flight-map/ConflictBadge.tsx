@@ -11,7 +11,7 @@ type ConflictBadgeProps = {
 export default function ConflictBadge({ conflictCount }: ConflictBadgeProps) {
   if (conflictCount <= 0) return null;
   return (
-    <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border border-red-400/40 bg-red-950/70 px-3 py-1 text-xs font-semibold text-red-200 backdrop-blur">
+    <div className="pointer-events-none absolute left-1/2 top-12 md:top-4 z-10 -translate-x-1/2 rounded-full border border-red-400/40 bg-red-950/70 px-3 py-1 text-xs font-semibold text-red-200 backdrop-blur shadow-lg">
       ⚠ {conflictCount} near-miss {conflictCount === 1 ? "pair" : "pairs"}
     </div>
   );
