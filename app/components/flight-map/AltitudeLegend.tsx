@@ -35,7 +35,7 @@ export default function AltitudeLegend({
   return (
     <div className="pointer-events-none absolute bottom-7 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1">
       {/* Arrow indicator for selected plane */}
-      <div className="relative w-64 md:w-80 h-4">
+      <div className="relative w-[26rem] md:w-[34rem] h-4">
         {arrowPct !== null && (
           <div
             className="absolute -top-0.5 transition-all duration-300 ease-out"
@@ -59,16 +59,27 @@ export default function AltitudeLegend({
         )}
       </div>
 
-      {/* Gradient bar */}
+      {/* Gradient bar with tick marks */}
       <div
-        className="w-64 md:w-80 h-2.5 rounded-full border border-white/25"
+        className="relative w-[26rem] md:w-[34rem] h-2.5 border border-white/25"
         style={{
           background: `linear-gradient(to right, ${gradientStops})`,
         }}
-      />
+      >
+        {ALTITUDE_COLOR_STOPS.slice(1).map(([alt]) => {
+          const pct = (alt / maxAlt) * 100;
+          return (
+            <div
+              key={alt}
+              className="absolute top-0 h-full w-px bg-black/30"
+              style={{ left: `${pct}%` }}
+            />
+          );
+        })}
+      </div>
 
       {/* Number labels */}
-      <div className="relative w-64 md:w-80 h-3">
+      <div className="relative w-[26rem] md:w-[34rem] h-3">
         {ALTITUDE_COLOR_STOPS.map(([alt]) => {
           const pct = (alt / maxAlt) * 100;
           return (
