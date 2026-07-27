@@ -9,6 +9,8 @@ type BasemapSwitcherProps = {
   onTogglePlanes: () => void;
   showAirports: boolean;
   onToggleAirports: () => void;
+  showAltitudeColors: boolean;
+  onToggleAltitudeColors: () => void;
 };
 
 const MODES: { id: Basemap; label: string }[] = [
@@ -28,6 +30,8 @@ export default function BasemapSwitcher({
   onTogglePlanes,
   showAirports,
   onToggleAirports,
+  showAltitudeColors,
+  onToggleAltitudeColors,
 }: BasemapSwitcherProps) {
   return (
     <div className="absolute left-2 top-2 md:left-4 md:top-4 z-10 flex overflow-hidden rounded-md border border-white/10 bg-black/60 text-[10px] md:text-xs font-medium backdrop-blur shadow-lg">
@@ -68,6 +72,16 @@ export default function BasemapSwitcher({
       >
         🏢
       </button>
+      <button
+          type="button"
+          onClick={onToggleAltitudeColors}
+          className={`px-3 py-1.5 transition-colors ${
+            showAltitudeColors ? "bg-white/90 text-black" : "text-white/80 hover:bg-white/10"
+          }`}
+          title="Color planes by altitude"
+        >
+          🎨
+        </button>
     </div>
   );
 }

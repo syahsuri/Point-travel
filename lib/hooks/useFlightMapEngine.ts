@@ -6,6 +6,7 @@ import maplibregl, { type GeoJSONSource } from "maplibre-gl";
 import { loadPlanes } from "@/lib/planes";
 import { loadAirports } from "@/lib/airports";
 import { setBasemap, BASE_STYLE } from "@/lib/mapStyle";
+import { altitudeColorExpression } from "@/lib/altitudeColor";
 import {
   deadReckon,
   greatCircle,
@@ -580,6 +581,23 @@ export function useFlightMapEngine({
         map.addSource("planes", {
           type: "geojson",
           data: planesToGeoJSON(planes),
+        });
+        // Altitude-color glow, sharing the `planes` source so it updates
+        // automatically every animate() frame with zero extra code.
+        map.addLayer({
+          id: "altitude-glow",
+          type: "circle",
+          source: "planes",
+          layout: { visibility: "none" }, // hidden by default; toggled from the UI
+          paint: {
+            "circle-radius": [
+              "interpolate", ["linear"], ["zoom"],
+              4, 8, 7, 11, 10, 15, 13, 20,
+            ],
+            "circle-color": altitudeColorExpression(),
+            "circle-blur": 0.6,
+            "circle-opacity": 0.55,
+          },
         });
 
         map.addLayer({
