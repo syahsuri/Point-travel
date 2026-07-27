@@ -380,7 +380,7 @@ export default function FlightMap() {
         onToggleAltitudeColors={toggleAltitudeColors}
       />
 
-      <AltitudeLegend visible={showAltitudeColors} />
+      <AltitudeLegend visible={showAltitudeColors} selectedAltitude={selected?.baro_altitude} />
 
       <SidePanel
         panelTab={panelTab}
