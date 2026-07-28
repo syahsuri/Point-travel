@@ -7,6 +7,7 @@ import { loadPlanes } from "@/lib/planes";
 import { loadAirports } from "@/lib/airports";
 import { setBasemap, BASE_STYLE } from "@/lib/mapStyle";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
+
 import {
   deadReckon,
   greatCircle,
@@ -16,9 +17,13 @@ import {
 } from "@/lib/geo";
 import {
   INDONESIA_BOUNDS,
+  ASEAN_BOUNDS,
   PLANE_ICON_SRC,
   PLANE_ICON_W,
   PLANE_ICON_H,
+  PLANE_SDF_ICON_SRC,
+  PLANE_SDF_ICON_W,
+  PLANE_SDF_ICON_H,
 } from "@/lib/mapConstants";
 import type { StateVector, Airport } from "@/lib/types";
 
@@ -142,6 +147,8 @@ export function useFlightMapEngine({
       style: BASE_STYLE,
       bounds: INDONESIA_BOUNDS,
       fitBoundsOptions: { padding: 20 },
+      maxBounds: ASEAN_BOUNDS,
+      minZoom: 3.5, 
       attributionControl: false,
       pitchWithRotate: false,
       dragRotate: false,
@@ -165,13 +172,31 @@ export function useFlightMapEngine({
 
     map.on("load", async () => {
       map.resize();
-      setBasemap(map, "streets");
+      setBasemap(map, "satellite");
 
       const img = new Image(PLANE_ICON_W, PLANE_ICON_H);
       img.onload = async () => {
         if (!map.hasImage("plane")) {
           map.addImage("plane", img, { pixelRatio: 2 });
         }
+
+        const loadSdfIcon = (
+          src: string,
+          name: string,
+          width: number,
+          height: number
+        ) =>
+          new Promise<void>((resolve) => {
+            const im = new Image(width, height);
+            im.onload = () => {
+              if (!map.hasImage(name)) {
+                map.addImage(name, im, { pixelRatio: 2, sdf: true });
+              }
+              resolve();
+            };
+            im.onerror = () => resolve();
+            im.src = src;
+          });
 
         const loadIcon = (src: string, name: string) =>
           new Promise<void>((resolve) => {
@@ -188,6 +213,12 @@ export function useFlightMapEngine({
           loadIcon("/icons/airport-unselected.png", "airport-unselected"),
           loadIcon("/icons/airport.png", "airport-selected"),
           loadIcon("/icons/nyan-cat.gif", "plane-chaos"),
+          loadSdfIcon(
+            PLANE_SDF_ICON_SRC,
+            "plane-sdf",
+            PLANE_SDF_ICON_W,
+            PLANE_SDF_ICON_H
+          ),
         ]);
 
         let planes: StateVector[] = [];
@@ -582,46 +613,26 @@ export function useFlightMapEngine({
           type: "geojson",
           data: planesToGeoJSON(planes),
         });
-        // Altitude-color glow, sharing the `planes` source so it updates
-        // automatically every animate() frame with zero extra code.
-        map.addLayer({
-          id: "altitude-glow",
-          type: "circle",
-          source: "planes",
-          layout: { visibility: "none" }, // hidden by default; toggled from the UI
-          paint: {
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              4, 8, 7, 11, 10, 15, 13, 20,
-            ],
-            "circle-color": altitudeColorExpression(),
-            "circle-blur": 0.6,
-            "circle-opacity": 0.55,
-          },
-        });
 
         map.addLayer({
           id: "planes",
           type: "symbol",
           source: "planes",
           layout: {
-            "icon-image": "plane",
+            "icon-image": "plane-sdf",
             "icon-rotate": ["-", ["get", "track"], 45],
             "icon-size": [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              4,
-              0.6,
-              7,
-              0.9,
-              10,
-              1.2,
-              13,
-              1.5,
+              "interpolate", ["linear"], ["zoom"],
+              4, 0.6, 7, 0.9, 10, 1.2, 13, 1.5,
             ],
             "icon-rotation-alignment": "map",
             "icon-allow-overlap": true,
+          },
+          paint: {
+            "icon-color": altitudeColorExpression(),
+            "icon-halo-color": "#000000",
+            "icon-halo-width": 1.5,
+            "icon-halo-blur": 0.15,
           },
         });
 

@@ -33,7 +33,14 @@ export default function AltitudeLegend({
     : null;
 
   return (
-    <div className="pointer-events-none absolute bottom-7 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1">
+    <div className="pointer-events-none absolute bottom-7 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1.5 rounded-lg border border-white/15 bg-black/55 px-4 pb-2.5 pt-3 backdrop-blur-md shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
+      {/* Tiny label header */}
+      <div className="flex w-full items-center justify-between text-[8px] md:text-[9px] font-semibold uppercase tracking-widest text-white/50">
+        <span>Ground</span>
+        <span className="text-white/70">Altitude</span>
+        <span>{maxAlt.toLocaleString()}m+</span>
+      </div>
+
       {/* Arrow indicator for selected plane */}
       <div className="relative w-[26rem] md:w-[34rem] h-4">
         {arrowPct !== null && (
@@ -42,11 +49,12 @@ export default function AltitudeLegend({
             style={{ left: `${arrowPct}%`, transform: "translateX(-50%)" }}
           >
             <svg
-              width="12"
-              height="14"
+              width="14"
+              height="16"
               viewBox="0 0 12 14"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.6))" }}
             >
               <path
                 d="M6 14L1 6H11L6 14Z"
@@ -59,36 +67,41 @@ export default function AltitudeLegend({
         )}
       </div>
 
-      {/* Gradient bar with tick marks */}
+      {/* Gradient bar with tick marks — glowing edge + inner sheen */}
       <div
-        className="relative w-[26rem] md:w-[34rem] h-2.5 border border-white/25"
+        className="relative w-[26rem] md:w-[34rem] h-3 rounded-full ring-1 ring-white/25 shadow-[0_0_10px_rgba(255,255,255,0.15)]"
         style={{
           background: `linear-gradient(to right, ${gradientStops})`,
         }}
       >
-        {ALTITUDE_COLOR_STOPS.slice(1).map(([alt]) => {
+        {/* subtle glass sheen across the top half */}
+        <div className="absolute inset-x-0 top-0 h-1/2 rounded-t-full bg-white/15" />
+
+        {ALTITUDE_COLOR_STOPS.slice(1, -1).map(([alt]) => {
           const pct = (alt / maxAlt) * 100;
           return (
             <div
               key={alt}
-              className="absolute top-0 h-full w-px bg-black/30"
+              className="absolute top-0 h-full w-px bg-black/25"
               style={{ left: `${pct}%` }}
             />
           );
         })}
       </div>
 
-      {/* Number labels */}
+      {/* Number labels — dark stroke so they stay legible over any color */}
       <div className="relative w-[26rem] md:w-[34rem] h-3">
         {ALTITUDE_COLOR_STOPS.map(([alt]) => {
           const pct = (alt / maxAlt) * 100;
           return (
             <span
               key={alt}
-              className="absolute text-[7px] md:text-[8px] font-medium text-white/60 leading-none"
+              className="absolute text-[7px] md:text-[8px] font-semibold text-white leading-none"
               style={{
                 left: `${pct}%`,
                 transform: "translateX(-50%)",
+                WebkitTextStroke: "2px rgba(0,0,0,0.85)",
+                paintOrder: "stroke fill",
               }}
             >
               {alt}

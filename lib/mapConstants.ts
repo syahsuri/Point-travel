@@ -5,6 +5,9 @@ export type Basemap = "dark" | "satellite" | "streets";
 export const INDONESIA_BOUNDS: [number, number, number, number] = [
   94, -11, 141, 7,
 ];
+export const ASEAN_BOUNDS: [number, number, number, number] = [
+  92, -11, 141, 29,
+];
 
 // Konami code easter egg sequence (↑↑↓↓←→←→BA) that triggers chaos mode.
 export const KONAMI_CODE = [
@@ -23,6 +26,10 @@ export const KONAMI_CODE = [
 export const PLANE_ICON_SRC = "/icons/plane.png";
 export const PLANE_ICON_W = 40;
 export const PLANE_ICON_H = 40;
+
+export const PLANE_SDF_ICON_SRC = "/icons/plane-sdf.png";
+export const PLANE_SDF_ICON_W = 150;
+export const PLANE_SDF_ICON_H = 150;
 
 export const SELECTED_PLANE_ICON_SRC = "/icons/plane-white.png";
 export const SELECTED_PLANE_ICON_W = 40;

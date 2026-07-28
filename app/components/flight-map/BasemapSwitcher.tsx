@@ -14,9 +14,10 @@ type BasemapSwitcherProps = {
 };
 
 const MODES: { id: Basemap; label: string }[] = [
+  { id: "satellite", label: "Satellite" },
   { id: "streets", label: "Streets" },
   { id: "dark", label: "Dark" },
-  { id: "satellite", label: "Satellite" },
+
 ];
 
 /**

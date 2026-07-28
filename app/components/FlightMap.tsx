@@ -48,7 +48,7 @@ export default function FlightMap() {
   const [airports, setAirports] = useState<Record<string, [number, number]>>(
     {}
   );
-  const [basemap, setBasemapState] = useState<Basemap>("streets");
+  const [basemap, setBasemapState] = useState<Basemap>("satellite");
   const [planeList, setPlaneList] = useState<StateVector[]>([]);
   const [airportList, setAirportList] = useState<Airport[]>([]);
   const [listOpen, setListOpen] = useState(true);
@@ -56,7 +56,7 @@ export default function FlightMap() {
   const [panelTab, setPanelTab] = useState<"flights" | "airports">("flights");
   const [airportQuery, setAirportQuery] = useState("");
   const [showPlanes, setShowPlanes] = useState(true);
-  const [showAltitudeColors, setShowAltitudeColors] = useState(false);
+  const [showAltitudeColors, setShowAltitudeColors] = useState(true);
   const [showAirports, setShowAirports] = useState(true);
   // Free-text filter for the flights list.
   const [query, setQuery] = useState("");
@@ -146,17 +146,7 @@ export default function FlightMap() {
   }
 
   function toggleAltitudeColors() {
-    const next = !showAltitudeColors;
-    setShowAltitudeColors(next);
-    const map = mapRef.current;
-    if (!map) return;
-    if (map.getLayer("altitude-glow")) {
-      map.setLayoutProperty(
-        "altitude-glow",
-        "visibility",
-        next ? "visible" : "none"
-      );
-    }
+    setShowAltitudeColors((v) => !v);
   }
 
   function toggleAirports() {
@@ -211,6 +201,16 @@ export default function FlightMap() {
   const nowWib = useWibClock();
 
   useChaosModeVisuals({ mapRef, active: chaosMode });
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("planes")) return;
+    if (chaosMode) return;
+    map.setLayoutProperty(
+      "planes",
+      "icon-image",
+      showAltitudeColors ? "plane-sdf" : "plane"
+    );
+  }, [showAltitudeColors, chaosMode, mapRef]);
 
   // Label/value rows for the detail sidebar (nulls filtered out at render).
   const ft = (m: number | null) =>
@@ -268,61 +268,61 @@ export default function FlightMap() {
     };
   })();
 
-  const {} = usePlanePhoto(selected?.icao24);
+  const { } = usePlanePhoto(selected?.icao24);
 
   const flightDetailRows: [string, string | null][] = selected
     ? [
-        ["Status", selected.flight_status],
-        ["From", selected.origin_iata],
-        ["To", selected.destination_iata],
-        ["Dep (sched)", fmtSched(selected.scheduled_departure)],
-        ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
-        ["ETA", eta],
-        [
-          "Forecast err",
-          accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
-        ],
-        ["Altitude", ft(selected.baro_altitude)],
-        [
-          "Speed",
-          typeof selected.velocity === "number"
-            ? `${Math.round(selected.velocity * 1.944)} kts`
-            : null,
-        ],
-        [
-          "Heading",
-          typeof selected.true_track === "number"
-            ? `${Math.round(selected.true_track)}°`
-            : null,
-        ],
-        [
-          "Position",
-          `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
-        ],
-        ["Updated", timeAgo(selected.last_time_position) || null],
-        // Trip-history extras (present once /api/history resolves for this trip).
-        ["Max alt", history ? ft(history.max_altitude) : null],
-        [
-          "Max speed",
-          typeof history?.max_velocity === "number"
-            ? `${Math.round(history.max_velocity * 1.944)} kts`
-            : null,
-        ],
-        ["Trip start", history ? fmtSched(history.trip_start_time) : null],
-        ["Trip end", history ? fmtSched(history.trip_end_time) : null],
-      ]
+      ["Status", selected.flight_status],
+      ["From", selected.origin_iata],
+      ["To", selected.destination_iata],
+      ["Dep (sched)", fmtSched(selected.scheduled_departure)],
+      ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
+      ["ETA", eta],
+      [
+        "Forecast err",
+        accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
+      ],
+      ["Altitude", ft(selected.baro_altitude)],
+      [
+        "Speed",
+        typeof selected.velocity === "number"
+          ? `${Math.round(selected.velocity * 1.944)} kts`
+          : null,
+      ],
+      [
+        "Heading",
+        typeof selected.true_track === "number"
+          ? `${Math.round(selected.true_track)}°`
+          : null,
+      ],
+      [
+        "Position",
+        `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
+      ],
+      ["Updated", timeAgo(selected.last_time_position) || null],
+      // Trip-history extras (present once /api/history resolves for this trip).
+      ["Max alt", history ? ft(history.max_altitude) : null],
+      [
+        "Max speed",
+        typeof history?.max_velocity === "number"
+          ? `${Math.round(history.max_velocity * 1.944)} kts`
+          : null,
+      ],
+      ["Trip start", history ? fmtSched(history.trip_start_time) : null],
+      ["Trip end", history ? fmtSched(history.trip_end_time) : null],
+    ]
     : [];
 
   const aircraftDetailRows: [string, string | null][] = selected
     ? [
-        ["Aircraft", selected.model],
-        ["Type", selected.typecode],
-        ["Maker", selected.manufacturername],
-        ["Registration", selected.registration],
-        ["Airline/Owner", selected.owner ?? selected.operator_callsign],
-        ["ICAO24", selected.icao24],
-        ["Country", selected.origin_country || null],
-      ]
+      ["Aircraft", selected.model],
+      ["Type", selected.typecode],
+      ["Maker", selected.manufacturername],
+      ["Registration", selected.registration],
+      ["Airline/Owner", selected.owner ?? selected.operator_callsign],
+      ["ICAO24", selected.icao24],
+      ["Country", selected.origin_country || null],
+    ]
     : [];
 
   // Flights-list filter: case-insensitive substring across the fields a user
@@ -330,27 +330,27 @@ export default function FlightMap() {
   const q = query.trim().toLowerCase();
   const filteredPlanes = q
     ? planeList.filter((p) =>
-        [
-          p.callsign,
-          p.owner,
-          p.operator_callsign,
-          p.origin_iata,
-          p.destination_iata,
-          p.icao24,
-        ]
-          .filter(Boolean)
-          .some((v) => (v as string).toLowerCase().includes(q))
-      )
+      [
+        p.callsign,
+        p.owner,
+        p.operator_callsign,
+        p.origin_iata,
+        p.destination_iata,
+        p.icao24,
+      ]
+        .filter(Boolean)
+        .some((v) => (v as string).toLowerCase().includes(q))
+    )
     : planeList;
 
   const aq = airportQuery.trim().toLowerCase();
   const filteredAirports = (
     aq
       ? airportList.filter((a) =>
-          [a.name, a.iata_code, a.icao_code, a.iso_country]
-            .filter(Boolean)
-            .some((v) => (v as string).toLowerCase().includes(aq))
-        )
+        [a.name, a.iata_code, a.icao_code, a.iso_country]
+          .filter(Boolean)
+          .some((v) => (v as string).toLowerCase().includes(aq))
+      )
       : airportList
   ).filter((a) => !a.name.startsWith("[Duplicate]"));
 
@@ -491,8 +491,8 @@ export default function FlightMap() {
                   "Type",
                   selectedAirport.type
                     ? selectedAirport.type
-                        .replace(/_/g, " ")
-                        .replace(/\b\w/g, (c) => c.toUpperCase())
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())
                     : null,
                 ],
               ] as [string, string | null][]
@@ -514,22 +514,20 @@ export default function FlightMap() {
             <button
               type="button"
               onClick={() => setAirportBoardTab("departure")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                airportBoardTab === "departure"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "departure"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+                }`}
             >
               Departures
             </button>
             <button
               type="button"
               onClick={() => setAirportBoardTab("arrival")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                airportBoardTab === "arrival"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "arrival"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+                }`}
             >
               Arrivals
             </button>
@@ -554,9 +552,8 @@ export default function FlightMap() {
                   const route = s.route_airport_iata ?? "???";
                   return (
                     <li
-                      key={`${s.flight_no ?? s.callsign ?? i}-${
-                        s.sched_time ?? i
-                      }`}
+                      key={`${s.flight_no ?? s.callsign ?? i}-${s.sched_time ?? i
+                        }`}
                       className="flex flex-col gap-0.5 px-3 py-1.5"
                     >
                       {/* Row 1: Flight_no | Airline name */}
