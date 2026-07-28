@@ -7,6 +7,7 @@ import { loadPlanes } from "@/lib/planes";
 import { loadAirports } from "@/lib/airports";
 import { setBasemap, BASE_STYLE } from "@/lib/mapStyle";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
+import { readPlanesCache, writePlanesCache } from "@/lib/planesCache";
 
 import {
   deadReckon,
@@ -123,7 +124,7 @@ export function useFlightMapEngine({
 }: UseFlightMapEngineArgs) {
   useEffect(() => {
     if (!containerRef.current) return;
-
+    const POLL_MS = 15_000;
     fetch("/data/airports.json")
       .then((r) => (r.ok ? r.json() : {}))
       .then((j) => {
@@ -148,14 +149,14 @@ export function useFlightMapEngine({
       bounds: INDONESIA_BOUNDS,
       fitBoundsOptions: { padding: 20 },
       maxBounds: ASEAN_BOUNDS,
-      minZoom: 3.5, 
+      minZoom: 3.5,
       attributionControl: false,
       pitchWithRotate: false,
       dragRotate: false,
     });
     mapRef.current = map;
 
-    let pollId: ReturnType<typeof setInterval> | undefined;
+    let pollId: ReturnType<typeof setTimeout> | undefined;
     let rafId: number | undefined;
 
     map.on("error", (e) => console.error("[map]", e?.error ?? e));
@@ -221,13 +222,34 @@ export function useFlightMapEngine({
           ),
         ]);
 
+        // Reuse a recent cache across page refreshes instead of always
+        // re-fetching immediately — the API should be driven by its own
+        // 15s schedule, not by how often the user reloads the tab.
         let planes: StateVector[] = [];
-        try {
-          const res = await loadPlanes();
-          planes = res.states;
-          lastApiTimeRef.current = res.time;
-        } catch (err) {
-          console.error(err);
+        const cached = readPlanesCache();
+        const loadStartedAt = Date.now();
+
+        if (cached && loadStartedAt - cached.fetchedAt < POLL_MS) {
+          planes = cached.states;
+          lastApiTimeRef.current = cached.time;
+        } else {
+          try {
+            const res = await loadPlanes();
+            planes = res.states;
+            lastApiTimeRef.current = res.time;
+            writePlanesCache({
+              time: res.time,
+              fetchedAt: Date.now(),
+              states: planes,
+            });
+          } catch (err) {
+            console.error(err);
+            if (cached) {
+              // Fall back to stale cache rather than an empty map on error.
+              planes = cached.states;
+              lastApiTimeRef.current = cached.time;
+            }
+          }
         }
 
         setPlaneList(planes);
@@ -622,8 +644,17 @@ export function useFlightMapEngine({
             "icon-image": "plane-sdf",
             "icon-rotate": ["-", ["get", "track"], 45],
             "icon-size": [
-              "interpolate", ["linear"], ["zoom"],
-              4, 0.6, 7, 0.9, 10, 1.2, 13, 1.5,
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              4,
+              0.6,
+              7,
+              0.9,
+              10,
+              1.2,
+              13,
+              1.5,
             ],
             "icon-rotation-alignment": "map",
             "icon-allow-overlap": true,
@@ -631,7 +662,8 @@ export function useFlightMapEngine({
           paint: {
             "icon-color": [
               "case",
-              ["any",
+              [
+                "any",
                 ["==", ["get", "on_ground"], true],
                 ["==", ["get", "flight_status"], "Landed"],
               ],
@@ -813,9 +845,7 @@ export function useFlightMapEngine({
         };
         rafId = requestAnimationFrame(animate);
 
-        // ---- Poll loop: fetches fresh state vectors every 30s ----
-        const POLL_MS = 30_000;
-        pollId = setInterval(async () => {
+        async function pollTick() {
           try {
             const res = await loadPlanes();
             if (res.time > lastApiTimeRef.current) {
@@ -826,6 +856,11 @@ export function useFlightMapEngine({
               updateTurnRates(next);
               drawConflicts(next);
               baseTimeRef.current = Date.now();
+              writePlanesCache({
+                time: res.time,
+                fetchedAt: Date.now(),
+                states: next,
+              });
 
               const selIcao = selectedIcaoRef.current;
               const actual = selIcao
@@ -872,17 +907,21 @@ export function useFlightMapEngine({
           } catch (err) {
             console.error(err);
           }
-        }, POLL_MS);
-      }; // end img.onload
+          pollId = setTimeout(pollTick, POLL_MS);
+        }
+
+        const cacheAgeMs = cached ? Date.now() - cached.fetchedAt : 0;
+        const firstDelay = Math.max(0, POLL_MS - cacheAgeMs);
+        pollId = setTimeout(pollTick, firstDelay);
+      }; 
       img.src = PLANE_ICON_SRC;
-    }); // end map.on("load", async () => { ... })
+    }); 
 
     return () => {
-      if (pollId) clearInterval(pollId);
+      if (pollId) clearTimeout(pollId);
       if (rafId !== undefined) cancelAnimationFrame(rafId);
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
