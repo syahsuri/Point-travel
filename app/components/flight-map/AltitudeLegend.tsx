@@ -38,11 +38,11 @@ export default function AltitudeLegend({
       <div className="flex w-full items-center justify-between text-[8px] md:text-[9px] font-semibold uppercase tracking-widest text-white/50">
         <span>Ground</span>
         <span className="text-white/70">Altitude</span>
-        <span>{maxAlt.toLocaleString()}m+</span>
+        <span>{maxAlt.toLocaleString("en-US")}m+</span>
       </div>
 
       {/* Arrow indicator for selected plane */}
-      <div className="relative w-[26rem] md:w-[34rem] h-4">
+      <div className="relative w-104 md:w-136 h-4">
         {arrowPct !== null && (
           <div
             className="absolute -top-0.5 transition-all duration-300 ease-out"
@@ -69,7 +69,7 @@ export default function AltitudeLegend({
 
       {/* Gradient bar with tick marks — glowing edge + inner sheen */}
       <div
-        className="relative w-[26rem] md:w-[34rem] h-3 rounded-full ring-1 ring-white/25 shadow-[0_0_10px_rgba(255,255,255,0.15)]"
+        className="relative w-104 md:w-136 h-3 rounded-full ring-1 ring-white/25 shadow-[0_0_10px_rgba(255,255,255,0.15)]"
         style={{
           background: `linear-gradient(to right, ${gradientStops})`,
         }}
@@ -90,7 +90,7 @@ export default function AltitudeLegend({
       </div>
 
       {/* Number labels — dark stroke so they stay legible over any color */}
-      <div className="relative w-[26rem] md:w-[34rem] h-3">
+      <div className="relative w-104 md:w-136 h-3">
         {ALTITUDE_COLOR_STOPS.map(([alt]) => {
           const pct = (alt / maxAlt) * 100;
           return (

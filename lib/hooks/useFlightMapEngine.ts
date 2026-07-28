@@ -629,7 +629,15 @@ export function useFlightMapEngine({
             "icon-allow-overlap": true,
           },
           paint: {
-            "icon-color": altitudeColorExpression(),
+            "icon-color": [
+              "case",
+              ["any",
+                ["==", ["get", "on_ground"], true],
+                ["==", ["get", "flight_status"], "Landed"],
+              ],
+              "#9ca3af", // gray-400 — landed/on-ground planes
+              altitudeColorExpression(),
+            ],
             "icon-halo-color": "#000000",
             "icon-halo-width": 1.5,
             "icon-halo-blur": 0.15,
