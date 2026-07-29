@@ -211,7 +211,7 @@ export function useFlightMapEngine({
             im.src = src;
           });
         await Promise.all([
-          loadIcon("/icons/airport-unselected.png", "airport-unselected"),
+          loadIcon("/icons/airport.png", "airport-unselected"),
           loadIcon("/icons/airport.png", "airport-selected"),
           loadIcon("/icons/nyan-cat.gif", "plane-chaos"),
           loadSdfIcon(
