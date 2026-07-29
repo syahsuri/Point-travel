@@ -23,6 +23,7 @@ import BasemapSwitcher from "@/components/flight-map/BasemapSwitcher";
 import SidePanel from "@/components/flight-map/SidePanel";
 import PlaneDetailSidebar from "@/components/flight-map/PlaneDetailSidebar";
 import AltitudeLegend from "@/components/flight-map/AltitudeLegend";
+import AirportDetailSidebar from "@/components/flight-map/AirportDetailSidebar";
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -268,61 +269,61 @@ export default function FlightMap() {
     };
   })();
 
-  const { } = usePlanePhoto(selected?.icao24);
+  const {} = usePlanePhoto(selected?.icao24);
 
   const flightDetailRows: [string, string | null][] = selected
     ? [
-      ["Status", selected.flight_status],
-      ["From", selected.origin_iata],
-      ["To", selected.destination_iata],
-      ["Dep (sched)", fmtSched(selected.scheduled_departure)],
-      ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
-      ["ETA", eta],
-      [
-        "Forecast err",
-        accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
-      ],
-      ["Altitude", ft(selected.baro_altitude)],
-      [
-        "Speed",
-        typeof selected.velocity === "number"
-          ? `${Math.round(selected.velocity * 1.944)} kts`
-          : null,
-      ],
-      [
-        "Heading",
-        typeof selected.true_track === "number"
-          ? `${Math.round(selected.true_track)}°`
-          : null,
-      ],
-      [
-        "Position",
-        `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
-      ],
-      ["Updated", timeAgo(selected.last_time_position) || null],
-      // Trip-history extras (present once /api/history resolves for this trip).
-      ["Max alt", history ? ft(history.max_altitude) : null],
-      [
-        "Max speed",
-        typeof history?.max_velocity === "number"
-          ? `${Math.round(history.max_velocity * 1.944)} kts`
-          : null,
-      ],
-      ["Trip start", history ? fmtSched(history.trip_start_time) : null],
-      ["Trip end", history ? fmtSched(history.trip_end_time) : null],
-    ]
+        ["Status", selected.flight_status],
+        ["From", selected.origin_iata],
+        ["To", selected.destination_iata],
+        ["Dep (sched)", fmtSched(selected.scheduled_departure)],
+        ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
+        ["ETA", eta],
+        [
+          "Forecast err",
+          accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
+        ],
+        ["Altitude", ft(selected.baro_altitude)],
+        [
+          "Speed",
+          typeof selected.velocity === "number"
+            ? `${Math.round(selected.velocity * 1.944)} kts`
+            : null,
+        ],
+        [
+          "Heading",
+          typeof selected.true_track === "number"
+            ? `${Math.round(selected.true_track)}°`
+            : null,
+        ],
+        [
+          "Position",
+          `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
+        ],
+        ["Updated", timeAgo(selected.last_time_position) || null],
+        // Trip-history extras (present once /api/history resolves for this trip).
+        ["Max alt", history ? ft(history.max_altitude) : null],
+        [
+          "Max speed",
+          typeof history?.max_velocity === "number"
+            ? `${Math.round(history.max_velocity * 1.944)} kts`
+            : null,
+        ],
+        ["Trip start", history ? fmtSched(history.trip_start_time) : null],
+        ["Trip end", history ? fmtSched(history.trip_end_time) : null],
+      ]
     : [];
 
   const aircraftDetailRows: [string, string | null][] = selected
     ? [
-      ["Aircraft", selected.model],
-      ["Type", selected.typecode],
-      ["Maker", selected.manufacturername],
-      ["Registration", selected.registration],
-      ["Airline/Owner", selected.owner ?? selected.operator_callsign],
-      ["ICAO24", selected.icao24],
-      ["Country", selected.origin_country || null],
-    ]
+        ["Aircraft", selected.model],
+        ["Type", selected.typecode],
+        ["Maker", selected.manufacturername],
+        ["Registration", selected.registration],
+        ["Airline/Owner", selected.owner ?? selected.operator_callsign],
+        ["ICAO24", selected.icao24],
+        ["Country", selected.origin_country || null],
+      ]
     : [];
 
   // Flights-list filter: case-insensitive substring across the fields a user
@@ -330,27 +331,27 @@ export default function FlightMap() {
   const q = query.trim().toLowerCase();
   const filteredPlanes = q
     ? planeList.filter((p) =>
-      [
-        p.callsign,
-        p.owner,
-        p.operator_callsign,
-        p.origin_iata,
-        p.destination_iata,
-        p.icao24,
-      ]
-        .filter(Boolean)
-        .some((v) => (v as string).toLowerCase().includes(q))
-    )
+        [
+          p.callsign,
+          p.owner,
+          p.operator_callsign,
+          p.origin_iata,
+          p.destination_iata,
+          p.icao24,
+        ]
+          .filter(Boolean)
+          .some((v) => (v as string).toLowerCase().includes(q))
+      )
     : planeList;
 
   const aq = airportQuery.trim().toLowerCase();
   const filteredAirports = (
     aq
       ? airportList.filter((a) =>
-        [a.name, a.iata_code, a.icao_code, a.iso_country]
-          .filter(Boolean)
-          .some((v) => (v as string).toLowerCase().includes(aq))
-      )
+          [a.name, a.iata_code, a.icao_code, a.iso_country]
+            .filter(Boolean)
+            .some((v) => (v as string).toLowerCase().includes(aq))
+        )
       : airportList
   ).filter((a) => !a.name.startsWith("[Duplicate]"));
 
@@ -380,7 +381,10 @@ export default function FlightMap() {
         onToggleAltitudeColors={toggleAltitudeColors}
       />
 
-      <AltitudeLegend visible={showAltitudeColors} selectedAltitude={selected?.baro_altitude} />
+      <AltitudeLegend
+        visible={showAltitudeColors}
+        selectedAltitude={selected?.baro_altitude}
+      />
 
       <SidePanel
         panelTab={panelTab}
@@ -428,170 +432,16 @@ export default function FlightMap() {
 
       {/* Detail sidebar for the selected airport. */}
       {selectedAirport && (
-        <div className="absolute z-20 flex flex-col overflow-hidden bg-black/80 md:bg-black/70 text-xs text-white/85 backdrop-blur shadow-2xl transition-all bottom-0 left-0 w-full max-h-[50vh] rounded-t-xl border-t border-white/10 md:bottom-auto md:left-4 md:top-16 md:w-72 md:max-h-[calc(100dvh-5rem)] md:rounded-md md:border md:border-sky-400/20">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-2 border-b border-white/10 px-3 py-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sky-400 text-base leading-none">✈</span>
-                <span className="truncate text-sm font-semibold text-white">
-                  {selectedAirport.name}
-                </span>
-              </div>
-              {(selectedAirport.iata_code || selectedAirport.icao_code) && (
-                <div className="mt-0.5 text-white/60">
-                  {[selectedAirport.iata_code, selectedAirport.icao_code]
-                    .filter(Boolean)
-                    .join(" / ")}
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={deselectAirport}
-              aria-label="Close"
-              className="shrink-0 rounded px-1.5 text-base leading-none text-white/60 hover:bg-white/10 hover:text-white"
-            >
-              ×
-            </button>
-          </div>
-
-          {/* Placeholder photo */}
-          <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
-            <div className="relative aspect-video w-full overflow-hidden rounded border border-white/10 bg-black/40">
-              <img
-                src="/images/plane-placeholder.png"
-                alt="Airport"
-                className="w-full h-full object-cover opacity-75"
-              />
-              <div className="absolute inset-0 flex flex-col justify-end p-2 bg-linear-to-t from-black/70 via-transparent">
-                <span className="text-[11px] font-semibold text-white leading-tight">
-                  {selectedAirport.name}
-                </span>
-                {selectedAirport.iata_code && (
-                  <span className="text-[10px] text-sky-300">
-                    {selectedAirport.iata_code}
-                  </span>
-                )}
-              </div>
-              <div className="absolute top-1 right-2 rounded bg-black/60 px-1 text-[9px] text-white/50">
-                Placeholder Photo
-              </div>
-            </div>
-          </div>
-
-          {/* Info rows — fixed, right below the photo */}
-          <dl className="divide-y divide-white/5 border-b border-white/10 shrink-0">
-            {(
-              [
-                ["IATA", selectedAirport.iata_code],
-                ["ICAO", selectedAirport.icao_code],
-                ["Country", selectedAirport.iso_country || null],
-                [
-                  "Type",
-                  selectedAirport.type
-                    ? selectedAirport.type
-                      .replace(/_/g, " ")
-                      .replace(/\b\w/g, (c) => c.toUpperCase())
-                    : null,
-                ],
-              ] as [string, string | null][]
-            )
-              .filter(([, v]) => v)
-              .map(([label, value]) => (
-                <div
-                  key={label}
-                  className="flex justify-between gap-3 px-3 py-1.5"
-                >
-                  <dt className="shrink-0 text-white/45">{label}</dt>
-                  <dd className="truncate text-right text-white/90">{value}</dd>
-                </div>
-              ))}
-          </dl>
-
-          {/* ARRIVAL/DEPARTURE TABS */}
-          <div className="flex border-b border-white/10 bg-white/5 shrink-0 text-[11px]">
-            <button
-              type="button"
-              onClick={() => setAirportBoardTab("departure")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "departure"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
-            >
-              Departures
-            </button>
-            <button
-              type="button"
-              onClick={() => setAirportBoardTab("arrival")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "arrival"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
-            >
-              Arrivals
-            </button>
-          </div>
-
-          {/* Schedule list — the only scrolling region now */}
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {scheduleLoading && (
-              <div className="px-3 py-4 text-center text-white/40">
-                Loading…
-              </div>
-            )}
-            {!scheduleLoading && schedule.length === 0 && (
-              <div className="px-3 py-4 text-center text-white/40">
-                No flights found.
-              </div>
-            )}
-            {!scheduleLoading && schedule.length > 0 && (
-              <ul className="divide-y divide-white/5">
-                {schedule.map((s, i) => {
-                  const time = fmtSched(s.sched_time);
-                  const route = s.route_airport_iata ?? "???";
-                  return (
-                    <li
-                      key={`${s.flight_no ?? s.callsign ?? i}-${s.sched_time ?? i
-                        }`}
-                      className="flex flex-col gap-0.5 px-3 py-1.5"
-                    >
-                      {/* Row 1: Flight_no | Airline name */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate font-medium text-white/90">
-                          {s.flight_no ?? s.callsign ?? "—"}
-                        </span>
-                        <span className="shrink-0 truncate text-white/50">
-                          {s.airline_name ?? ""}
-                        </span>
-                      </div>
-                      {/* Row 2: Time | Status */}
-                      <div className="flex items-center justify-between gap-2 text-[10px]">
-                        <span className="text-white/60">{time ?? "—"}</span>
-                        {s.board_status && (
-                          <span
-                            className={`font-medium ${statusTextClass(
-                              s.board_status
-                            )}`}
-                          >
-                            {s.board_status}
-                          </span>
-                        )}
-                      </div>
-                      {/* Row 3: From | Target */}
-                      <div className="flex items-center justify-between gap-2 text-[10px] text-white/45">
-                        <span>
-                          {airportBoardTab === "departure" ? "To" : "From"}
-                        </span>
-                        <span className="truncate">{route}</span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </div>
+        <AirportDetailSidebar
+          airport={selectedAirport}
+          onClose={deselectAirport}
+          airportBoardTab={airportBoardTab}
+          onAirportBoardTabChange={setAirportBoardTab}
+          schedule={schedule}
+          scheduleLoading={scheduleLoading}
+          fmtSchedText={fmtSched}
+          statusTextClassFn={statusTextClass}
+        />
       )}
       <AttributionFooter />
     </div>
