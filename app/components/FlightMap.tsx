@@ -204,17 +204,24 @@ export default function FlightMap() {
   const nowWib = useWibClock();
 
   useChaosModeVisuals({ mapRef, active: chaosMode });
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !map.getLayer("planes")) return;
-    if (chaosMode) return; // useChaosModeVisuals owns icon-image while active
-    map.setPaintProperty(
-      "planes",
-      "icon-color",
-      showAltitudeColors ? altitudeColorExpression() : DEFAULT_PLANE_COLOR
-    );
-  }, [showAltitudeColors, chaosMode]);
 
+  useEffect(() => {
+  const map = mapRef.current;
+  if (!map || !map.getLayer("planes")) return;
+  if (chaosMode) return; // useChaosModeVisuals owns icon-image while active
+
+  // CRITICAL: ensure the SDF icon is restored so icon-color actually works
+  const currentImage = map.getLayoutProperty("planes", "icon-image");
+  if (currentImage !== "plane-sdf") {
+    map.setLayoutProperty("planes", "icon-image", "plane-sdf");
+  }
+
+  map.setPaintProperty(
+    "planes",
+    "icon-color",
+    showAltitudeColors ? altitudeColorExpression() : DEFAULT_PLANE_COLOR
+  );
+}, [showAltitudeColors, chaosMode]);
   // Label/value rows for the detail sidebar (nulls filtered out at render).
   const ft = (m: number | null) =>
     typeof m === "number"
