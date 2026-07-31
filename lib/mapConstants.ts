@@ -23,9 +23,7 @@ export const KONAMI_CODE = [
   "a",
 ];
 
-export const PLANE_ICON_SRC = "/icons/plane.png";
-export const PLANE_ICON_W = 40;
-export const PLANE_ICON_H = 40;
+export const DEFAULT_PLANE_COLOR = "#2754A5";
 
 export const PLANE_SDF_ICON_SRC = "/icons/plane-sdf.png";
 export const PLANE_SDF_ICON_W = 150;

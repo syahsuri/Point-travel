@@ -19,12 +19,9 @@ import {
 import {
   INDONESIA_BOUNDS,
   ASEAN_BOUNDS,
-  PLANE_ICON_SRC,
-  PLANE_ICON_W,
-  PLANE_ICON_H,
   PLANE_SDF_ICON_SRC,
-  PLANE_SDF_ICON_W,
   PLANE_SDF_ICON_H,
+  PLANE_SDF_ICON_W,
 } from "@/lib/mapConstants";
 import type { StateVector, Airport } from "@/lib/types";
 
@@ -162,66 +159,62 @@ export function useFlightMapEngine({
     map.on("error", (e) => console.error("[map]", e?.error ?? e));
 
     map.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      "top-right"
-    );
-    map.addControl(
       new maplibregl.AttributionControl({
         customAttribution: "Basemap © Natural Earth (public domain)",
-      })
+      }),
+      "bottom-right"
+    );
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "bottom-right"
     );
 
     map.on("load", async () => {
       map.resize();
       setBasemap(map, "satellite");
 
-      const img = new Image(PLANE_ICON_W, PLANE_ICON_H);
-      img.onload = async () => {
-        if (!map.hasImage("plane")) {
-          map.addImage("plane", img, { pixelRatio: 2 });
-        }
+      const loadIcon = (src: string, name: string) =>
+        new Promise<void>((resolve) => {
+          const im = new Image();
+          im.onload = () => {
+            if (!map.hasImage(name)) map.addImage(name, im, { pixelRatio: 2 });
+            resolve();
+          };
+          im.onerror = () => resolve();
+          im.src = src;
+        });
 
-        const loadSdfIcon = (
-          src: string,
-          name: string,
-          width: number,
-          height: number
-        ) =>
-          new Promise<void>((resolve) => {
-            const im = new Image(width, height);
-            im.onload = () => {
-              if (!map.hasImage(name)) {
-                map.addImage(name, im, { pixelRatio: 2, sdf: true });
-              }
-              resolve();
-            };
-            im.onerror = () => resolve();
-            im.src = src;
-          });
+      const loadSdfIcon = (
+        src: string,
+        name: string,
+        width: number,
+        height: number
+      ) =>
+        new Promise<void>((resolve) => {
+          const im = new Image(width, height);
+          im.onload = () => {
+            if (!map.hasImage(name)) {
+              map.addImage(name, im, { pixelRatio: 2, sdf: true });
+            }
+            resolve();
+          };
+          im.onerror = () => resolve();
+          im.src = src;
+        });
 
-        const loadIcon = (src: string, name: string) =>
-          new Promise<void>((resolve) => {
-            const im = new Image();
-            im.onload = () => {
-              if (!map.hasImage(name))
-                map.addImage(name, im, { pixelRatio: 2 });
-              resolve();
-            };
-            im.onerror = () => resolve();
-            im.src = src;
-          });
-        await Promise.all([
-          loadIcon("/icons/airport.png", "airport-unselected"),
-          loadIcon("/icons/airport.png", "airport-selected"),
-          loadIcon("/icons/nyan-cat.gif", "plane-chaos"),
-          loadSdfIcon(
-            PLANE_SDF_ICON_SRC,
-            "plane-sdf",
-            PLANE_SDF_ICON_W,
-            PLANE_SDF_ICON_H
-          ),
-        ]);
+      await Promise.all([
+        loadIcon("/icons/airport-unselected.png", "airport-unselected"),
+        loadIcon("/icons/airport.png", "airport-selected"),
+        loadIcon("/icons/nyan-cat.gif", "plane-chaos"),
+        loadSdfIcon(
+          PLANE_SDF_ICON_SRC,
+          "plane-sdf",
+          PLANE_SDF_ICON_H,
+          PLANE_SDF_ICON_W
+        ),
+      ]);
 
+      {
         // Reuse a recent cache across page refreshes instead of always
         // re-fetching immediately — the API should be driven by its own
         // 15s schedule, not by how often the user reloads the tab.
@@ -532,7 +525,7 @@ export function useFlightMapEngine({
                 source: "airports",
                 minzoom: 4,
                 layout: {
-                  "icon-image": "airport-unselected",
+                  "icon-image": "airport-selected",
                   "icon-size": [
                     "interpolate",
                     ["linear"],
@@ -648,31 +641,22 @@ export function useFlightMapEngine({
               ["linear"],
               ["zoom"],
               4,
-              0.6,
+              0.7,
               7,
-              0.9,
+              1.0,
               10,
-              1.2,
+              1.35,
               13,
-              1.5,
+              1.7,
             ],
             "icon-rotation-alignment": "map",
             "icon-allow-overlap": true,
           },
           paint: {
-            "icon-color": [
-              "case",
-              [
-                "any",
-                ["==", ["get", "on_ground"], true],
-                ["==", ["get", "flight_status"], "Landed"],
-              ],
-              "#9ca3af", // gray-400 — landed/on-ground planes
-              altitudeColorExpression(),
-            ],
-            "icon-halo-color": "#000000",
-            "icon-halo-width": 1.5,
-            "icon-halo-blur": 0.15,
+            "icon-color": altitudeColorExpression(),
+            "icon-halo-color": "#0b1622",
+            "icon-halo-width": 1.4,
+            "icon-halo-blur": 0.3,
           },
         });
 
@@ -913,9 +897,8 @@ export function useFlightMapEngine({
         const cacheAgeMs = cached ? Date.now() - cached.fetchedAt : 0;
         const firstDelay = Math.max(0, POLL_MS - cacheAgeMs);
         pollId = setTimeout(pollTick, firstDelay);
-      }; 
-      img.src = PLANE_ICON_SRC;
-    }); 
+      }
+    });
 
     return () => {
       if (pollId) clearTimeout(pollId);

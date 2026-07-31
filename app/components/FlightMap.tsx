@@ -14,6 +14,8 @@ import { type Basemap } from "@/lib/mapConstants";
 import { setBasemap } from "@/lib/mapStyle";
 import { useFlightMapEngine } from "@/lib/hooks/useFlightMapEngine";
 import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
+import { altitudeColorExpression } from "@/lib/altitudeColor";
+import { DEFAULT_PLANE_COLOR } from "@/lib/mapConstants";
 
 import ClockBadge from "@/components/flight-map/ClockBadge";
 import ConflictBadge from "@/components/flight-map/ConflictBadge";
@@ -205,13 +207,13 @@ export default function FlightMap() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getLayer("planes")) return;
-    if (chaosMode) return;
-    map.setLayoutProperty(
+    if (chaosMode) return; // useChaosModeVisuals owns icon-image while active
+    map.setPaintProperty(
       "planes",
-      "icon-image",
-      showAltitudeColors ? "plane-sdf" : "plane"
+      "icon-color",
+      showAltitudeColors ? altitudeColorExpression() : DEFAULT_PLANE_COLOR
     );
-  }, [showAltitudeColors, chaosMode, mapRef]);
+  }, [showAltitudeColors, chaosMode]);
 
   // Label/value rows for the detail sidebar (nulls filtered out at render).
   const ft = (m: number | null) =>

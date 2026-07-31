@@ -36,7 +36,7 @@ export function useChaosModeVisuals({ mapRef, active }: UseChaosModeVisualsArgs)
 
     if (!active) {
       map.setLayoutProperty("planes", "icon-size", [...NORMAL_ICON_SIZE]);
-      map.setLayoutProperty("planes", "icon-image", "plane");
+      map.setLayoutProperty("planes", "icon-image", "plane-sdf");
       return;
     }
 

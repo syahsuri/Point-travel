@@ -8,7 +8,7 @@ const DARK_LABELS = ["country-labels", "province-labels", "city-labels"];
 
 export const BASEMAP_LAYERS: Record<Basemap, string[]> = {
   dark: ["land", "land-outline", ...DARK_LABELS],
-  satellite: ["sat", "sat-ref"],
+  satellite: ["sat", "sat-ref", "sat-scrim"],
   streets: ["osm"],
 };
 
@@ -17,6 +17,7 @@ export const ALL_BASEMAP_LAYERS = [
   "land-outline",
   "sat",
   "sat-ref",
+  "sat-scrim",
   "osm",
   ...DARK_LABELS,
 ];
@@ -89,6 +90,11 @@ export const BASE_STYLE: StyleSpecification = {
       type: "raster",
       source: "sat",
       layout: { visibility: "none" },
+      paint: {
+        "raster-saturation": -0.4,
+        "raster-brightness-max": 0.75,
+        "raster-contrast": -0.1,
+      },
     },
     {
       id: "sat-ref",
@@ -97,10 +103,20 @@ export const BASE_STYLE: StyleSpecification = {
       layout: { visibility: "none" },
     },
     {
+      id: "sat-scrim",
+      type: "background",
+      layout: { visibility: "none" },
+      paint: { "background-color": "#0b1622", "background-opacity": 0.15 },
+    },
+    {
       id: "osm",
       type: "raster",
       source: "osm",
       layout: { visibility: "none" },
+      paint: {
+        "raster-saturation": -0.3,
+        "raster-brightness-max": 0.85,
+      },
     },
     // Dark vector basemap — visible by default.
     {
