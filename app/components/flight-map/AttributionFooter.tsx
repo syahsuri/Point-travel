@@ -6,7 +6,8 @@
  */
 export default function AttributionFooter() {
   return (
-    <div className="pointer-events-none absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black/40 px-2 py-0.5 text-[9px] text-white/40 backdrop-blur-sm">
+    <div className="pointer-events-none absolute bottom-1 left-4 z-10 rounded bg-black/40 px-2 py-0.5 text-[9px] text-white/40 backdrop-blur-sm">
+      {" "}
       Flight Data By:{" "}
       <a
         href="https://opensky-network.org/"

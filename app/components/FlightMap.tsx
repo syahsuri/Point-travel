@@ -424,8 +424,6 @@ export default function FlightMap() {
           follow={follow}
           onToggleFollow={toggleFollow}
           onClose={deselectPlane}
-          sidebarTab={sidebarTab}
-          onSidebarTabChange={setSidebarTab}
           flightDetailRows={flightDetailRows}
           aircraftDetailRows={aircraftDetailRows}
           progress={progress}
