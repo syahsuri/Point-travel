@@ -388,6 +388,10 @@ export default function FlightMap() {
         onToggleAirports={toggleAirports}
         showAltitudeColors={showAltitudeColors}
         onToggleAltitudeColors={toggleAltitudeColors}
+        onOpen={() => {
+          deselectPlane();
+          deselectAirport();
+        }}
       />
 
       <AltitudeLegend
