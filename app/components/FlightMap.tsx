@@ -10,7 +10,7 @@ import { useNearMissRadar } from "@/lib/hooks/useNearMissRadar";
 import { useChaosModeVisuals } from "@/lib/hooks/useChaosModeVisuals";
 import { haversineMeters } from "@/lib/geo";
 import { timeAgo, fmtSched, statusTextClass } from "@/lib/format";
-import { type Basemap } from "@/lib/mapConstants";
+import { type Basemap, INDONESIA_BOUNDS } from "@/lib/mapConstants";
 import { setBasemap } from "@/lib/mapStyle";
 import { useFlightMapEngine } from "@/lib/hooks/useFlightMapEngine";
 import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
@@ -18,6 +18,7 @@ import { altitudeColorExpression } from "@/lib/altitudeColor";
 import { DEFAULT_PLANE_COLOR } from "@/lib/mapConstants";
 
 import ClockBadge from "@/components/flight-map/ClockBadge";
+import TravelBadge from "@/components/flight-map/TravelBadge";
 import ConflictBadge from "@/components/flight-map/ConflictBadge";
 import ChaosOverlay from "@/components/flight-map/ChaosOverlay";
 import AttributionFooter from "@/components/flight-map/AttributionFooter";
@@ -76,6 +77,12 @@ export default function FlightMap() {
   const lastApiTimeRef = useRef<number>(0);
 
   const [chaosMode, setChaosMode] = useState(false);
+
+  function resetMapView() {
+    const map = mapRef.current;
+    if (!map) return;
+    map.fitBounds(INDONESIA_BOUNDS, { padding: 20 });
+  }
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -378,6 +385,8 @@ export default function FlightMap() {
       <ChaosOverlay active={chaosMode} />
       {SHOW_CONFLICT_BADGE && <ConflictBadge conflictCount={conflictCount} />}
       <ClockBadge nowWib={nowWib} />
+
+      <TravelBadge onReset={resetMapView} />
 
       <BasemapSwitcher
         basemap={basemap}
