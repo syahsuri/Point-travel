@@ -159,12 +159,6 @@ export function useFlightMapEngine({
     map.on("error", (e) => console.error("[map]", e?.error ?? e));
 
     map.addControl(
-      new maplibregl.AttributionControl({
-        customAttribution: "Basemap © Natural Earth (public domain)",
-      }),
-      "bottom-right"
-    );
-    map.addControl(
       new maplibregl.NavigationControl({ showCompass: false }),
       "bottom-right"
     );
@@ -758,18 +752,18 @@ export function useFlightMapEngine({
             destSrc.setData(
               destCoord
                 ? {
-                    type: "FeatureCollection",
-                    features: [
-                      {
-                        type: "Feature",
-                        geometry: {
-                          type: "LineString",
-                          coordinates: greatCircle(head, destCoord),
-                        },
-                        properties: {},
+                  type: "FeatureCollection",
+                  features: [
+                    {
+                      type: "Feature",
+                      geometry: {
+                        type: "LineString",
+                        coordinates: greatCircle(head, destCoord),
                       },
-                    ],
-                  }
+                      properties: {},
+                    },
+                  ],
+                }
                 : { type: "FeatureCollection", features: [] }
             );
           }
@@ -778,12 +772,12 @@ export function useFlightMapEngine({
           const ppathRaw = sel.on_ground
             ? []
             : predictPath(
-                sel.longitude,
-                sel.latitude,
-                sel.velocity,
-                sel.true_track,
-                omega
-              );
+              sel.longitude,
+              sel.latitude,
+              sel.velocity,
+              sel.true_track,
+              omega
+            );
           const ppath =
             ppathRaw.length >= 3 ? smoothPath(ppathRaw, 1) : ppathRaw;
           pred?.setData({
@@ -791,12 +785,12 @@ export function useFlightMapEngine({
             features:
               ppath.length >= 2
                 ? [
-                    {
-                      type: "Feature",
-                      geometry: { type: "LineString", coordinates: ppath },
-                      properties: {},
-                    },
-                  ]
+                  {
+                    type: "Feature",
+                    geometry: { type: "LineString", coordinates: ppath },
+                    properties: {},
+                  },
+                ]
                 : [],
           });
           const turning = !sel.on_ground && Math.abs(omega) >= 0.15;
@@ -807,12 +801,12 @@ export function useFlightMapEngine({
             type: "FeatureCollection",
             features: turning
               ? [
-                  {
-                    type: "Feature",
-                    geometry: { type: "Point", coordinates: head },
-                    properties: {},
-                  },
-                ]
+                {
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: head },
+                  properties: {},
+                },
+              ]
               : [],
           });
           const selectedMarker = selectedMarkerRef.current;

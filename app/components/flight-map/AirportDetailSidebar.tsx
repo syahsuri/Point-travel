@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Airport, ScheduleEntry } from "@/lib/types";
 
 type AirportDetailSidebarProps = {
@@ -29,7 +29,11 @@ export default function AirportDetailSidebar({
   fmtSchedText,
   statusTextClassFn,
 }: AirportDetailSidebarProps) {
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
+
+  useEffect(() => {
+    setIsMinimized(true);
+  }, [airport.icao_code, airport.name]);
 
   return (
     <div className="absolute z-20 flex flex-col overflow-hidden bg-black/85 md:bg-black/70 text-xs text-white/85 backdrop-blur-md shadow-2xl transition-all bottom-0 left-0 w-full rounded-t-2xl border-t border-white/15 md:bottom-auto md:left-4 md:top-16 md:w-72 md:max-h-[calc(100dvh-5rem)] md:rounded-md md:border md:border-sky-400/20">

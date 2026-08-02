@@ -27,6 +27,7 @@ import SidePanel from "@/components/flight-map/SidePanel";
 import PlaneDetailSidebar from "@/components/flight-map/PlaneDetailSidebar";
 import AltitudeLegend from "@/components/flight-map/AltitudeLegend";
 import AirportDetailSidebar from "@/components/flight-map/AirportDetailSidebar";
+import MapAttribution from "@/components/flight-map/MapAttribution";
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -77,6 +78,7 @@ export default function FlightMap() {
   const lastApiTimeRef = useRef<number>(0);
 
   const [chaosMode, setChaosMode] = useState(false);
+  const [travelBadgeExpanded, setTravelBadgeExpanded] = useState(false);
 
   function resetMapView() {
     const map = mapRef.current;
@@ -198,7 +200,10 @@ export default function FlightMap() {
     setPlaneList,
     selectPlane,
     deselectPlane,
-    setSelectedAirport,
+    setSelectedAirport: (a) => {
+      if (a) selectAirportFromList(a);
+      else deselectAirport();
+    },
     setAirportBoardTab,
     deselectAirport,
     baseTimeRef,
@@ -298,61 +303,61 @@ export default function FlightMap() {
     };
   })();
 
-  const {} = usePlanePhoto(selected?.icao24);
+  const { } = usePlanePhoto(selected?.icao24);
 
   const flightDetailRows: [string, string | null][] = selected
     ? [
-        ["Status", selected.flight_status],
-        ["From", selected.origin_iata],
-        ["To", selected.destination_iata],
-        ["Dep (sched)", fmtSched(selected.scheduled_departure)],
-        ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
-        ["ETA", eta],
-        [
-          "Forecast err",
-          accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
-        ],
-        ["Altitude", ft(selected.baro_altitude)],
-        [
-          "Speed",
-          typeof selected.velocity === "number"
-            ? `${Math.round(selected.velocity * 1.944)} kts`
-            : null,
-        ],
-        [
-          "Heading",
-          typeof selected.true_track === "number"
-            ? `${Math.round(selected.true_track)}°`
-            : null,
-        ],
-        [
-          "Position",
-          `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
-        ],
-        ["Updated", timeAgo(selected.last_time_position) || null],
-        // Trip-history extras (present once /api/history resolves for this trip).
-        ["Max alt", history ? ft(history.max_altitude) : null],
-        [
-          "Max speed",
-          typeof history?.max_velocity === "number"
-            ? `${Math.round(history.max_velocity * 1.944)} kts`
-            : null,
-        ],
-        ["Trip start", history ? fmtSched(history.trip_start_time) : null],
-        ["Trip end", history ? fmtSched(history.trip_end_time) : null],
-      ]
+      ["Status", selected.flight_status],
+      ["From", selected.origin_iata],
+      ["To", selected.destination_iata],
+      ["Dep (sched)", fmtSched(selected.scheduled_departure)],
+      ["Arr (sched)", fmtSched(selected.scheduled_arrival)],
+      ["ETA", eta],
+      [
+        "Forecast err",
+        accuracyKm != null ? `${accuracyKm.toFixed(1)} km` : null,
+      ],
+      ["Altitude", ft(selected.baro_altitude)],
+      [
+        "Speed",
+        typeof selected.velocity === "number"
+          ? `${Math.round(selected.velocity * 1.944)} kts`
+          : null,
+      ],
+      [
+        "Heading",
+        typeof selected.true_track === "number"
+          ? `${Math.round(selected.true_track)}°`
+          : null,
+      ],
+      [
+        "Position",
+        `${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`,
+      ],
+      ["Updated", timeAgo(selected.last_time_position) || null],
+      // Trip-history extras (present once /api/history resolves for this trip).
+      ["Max alt", history ? ft(history.max_altitude) : null],
+      [
+        "Max speed",
+        typeof history?.max_velocity === "number"
+          ? `${Math.round(history.max_velocity * 1.944)} kts`
+          : null,
+      ],
+      ["Trip start", history ? fmtSched(history.trip_start_time) : null],
+      ["Trip end", history ? fmtSched(history.trip_end_time) : null],
+    ]
     : [];
 
   const aircraftDetailRows: [string, string | null][] = selected
     ? [
-        ["Aircraft", selected.model],
-        ["Type", selected.typecode],
-        ["Maker", selected.manufacturername],
-        ["Registration", selected.registration],
-        ["Airline/Owner", selected.owner ?? selected.operator_callsign],
-        ["ICAO24", selected.icao24],
-        ["Country", selected.origin_country || null],
-      ]
+      ["Aircraft", selected.model],
+      ["Type", selected.typecode],
+      ["Maker", selected.manufacturername],
+      ["Registration", selected.registration],
+      ["Airline/Owner", selected.owner ?? selected.operator_callsign],
+      ["ICAO24", selected.icao24],
+      ["Country", selected.origin_country || null],
+    ]
     : [];
 
   // Flights-list filter: case-insensitive substring across the fields a user
@@ -360,27 +365,27 @@ export default function FlightMap() {
   const q = query.trim().toLowerCase();
   const filteredPlanes = q
     ? planeList.filter((p) =>
-        [
-          p.callsign,
-          p.owner,
-          p.operator_callsign,
-          p.origin_iata,
-          p.destination_iata,
-          p.icao24,
-        ]
-          .filter(Boolean)
-          .some((v) => (v as string).toLowerCase().includes(q))
-      )
+      [
+        p.callsign,
+        p.owner,
+        p.operator_callsign,
+        p.origin_iata,
+        p.destination_iata,
+        p.icao24,
+      ]
+        .filter(Boolean)
+        .some((v) => (v as string).toLowerCase().includes(q))
+    )
     : planeList;
 
   const aq = airportQuery.trim().toLowerCase();
   const filteredAirports = (
     aq
       ? airportList.filter((a) =>
-          [a.name, a.iata_code, a.icao_code, a.iso_country]
-            .filter(Boolean)
-            .some((v) => (v as string).toLowerCase().includes(aq))
-        )
+        [a.name, a.iata_code, a.icao_code, a.iso_country]
+          .filter(Boolean)
+          .some((v) => (v as string).toLowerCase().includes(aq))
+      )
       : airportList
   ).filter((a) => !a.name.startsWith("[Duplicate]"));
 
@@ -397,9 +402,12 @@ export default function FlightMap() {
 
       <ChaosOverlay active={chaosMode} />
       {SHOW_CONFLICT_BADGE && <ConflictBadge conflictCount={conflictCount} />}
-      <ClockBadge nowWib={nowWib} />
+      <ClockBadge nowWib={nowWib} pushedAway={travelBadgeExpanded} />
 
-      <TravelBadge onReset={resetMapView} />
+      <TravelBadge
+        onReset={resetMapView}
+        onExpandedChange={setTravelBadgeExpanded}
+      />
 
       <BasemapSwitcher
         basemap={basemap}
@@ -426,6 +434,7 @@ export default function FlightMap() {
         onPanelTabChange={setPanelTab}
         listOpen={listOpen}
         onToggleListOpen={() => setListOpen((v) => !v)}
+        compact={travelBadgeExpanded}
         planeList={planeList}
         filteredPlanes={filteredPlanes}
         query={query}
@@ -477,6 +486,7 @@ export default function FlightMap() {
         />
       )}
       <AttributionFooter />
+      <MapAttribution />
     </div>
   );
 }

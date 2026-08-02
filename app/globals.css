@@ -94,3 +94,26 @@ body {
 .animate-pulse-slow {
   animation: pulse-slow 2.5s infinite;
 }
+
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  max-width: 32px;
+  overflow: hidden;
+}
+
+.maplibregl-ctrl-attrib.maplibregl-compact-show {
+  max-width: none;
+  overflow: visible;
+}
+
+.maplibregl-ctrl-bottom-right {
+  bottom: 30px !important;
+}
+
+@media (max-width: 768px) {
+  .maplibregl-ctrl-bottom-right {
+    top: 50% !important;
+    bottom: auto !important;
+    right: 8px !important;
+    transform: translateY(-50%);
+  }
+}

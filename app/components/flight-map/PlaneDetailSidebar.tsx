@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { StateVector, TripHistory } from "@/lib/types";
 import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
 
@@ -43,7 +43,11 @@ export default function PlaneDetailSidebar({
     selected.icao24
   );
   const [aircraftOpen, setAircraftOpen] = useState(true);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
+
+  useEffect(() => {
+    setIsMinimized(true);
+  }, [selected.icao24]);
 
   const aircraftPhoto = (
     <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
