@@ -6,7 +6,7 @@ export const INDONESIA_BOUNDS: [number, number, number, number] = [
   94, -11, 141, 7,
 ];
 export const ASEAN_BOUNDS: [number, number, number, number] = [
-  92, -11, 141, 29,
+  92, -20, 141, 29,
 ];
 
 // Konami code easter egg sequence (↑↑↓↓←→←→BA) that triggers chaos mode.
