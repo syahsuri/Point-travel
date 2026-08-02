@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import type { Airport, ScheduleEntry } from "@/lib/types";
 
 type AirportDetailSidebarProps = {
@@ -29,17 +29,20 @@ export default function AirportDetailSidebar({
   fmtSchedText,
   statusTextClassFn,
 }: AirportDetailSidebarProps) {
-  const [isMinimized, setIsMinimized] = useState(true);
-
-  // Reset to minimized whenever a different airport is selected. Doing this
-  // during render (compared against a ref) instead of in a useEffect avoids
-  // the synchronous setState-in-effect cascading-render lint error.
   const airportKey = `${airport.icao_code ?? ""}|${airport.name}`;
-  const prevAirportKeyRef = useRef(airportKey);
-  if (prevAirportKeyRef.current !== airportKey) {
-    prevAirportKeyRef.current = airportKey;
-    setIsMinimized(true);
+  const [state, setState] = useState({ key: airportKey, isMinimized: true });
+
+  if (state.key !== airportKey) {
+    setState({ key: airportKey, isMinimized: true });
   }
+
+  const isMinimized = state.isMinimized;
+  const setIsMinimized = (value: boolean | ((prev: boolean) => boolean)) =>
+    setState((s) => ({
+      ...s,
+      isMinimized:
+        typeof value === "function" ? value(s.isMinimized) : value,
+    }));
 
   return (
     <div className="absolute z-20 flex flex-col overflow-hidden bg-black/85 md:bg-black/70 text-xs text-white/85 backdrop-blur-md shadow-2xl transition-all bottom-0 left-0 w-full rounded-t-2xl border-t border-white/15 md:bottom-auto md:left-4 md:top-16 md:w-72 md:max-h-[calc(100dvh-5rem)] md:rounded-md md:border md:border-sky-400/20">
@@ -165,22 +168,20 @@ export default function AirportDetailSidebar({
             <button
               type="button"
               onClick={() => onAirportBoardTabChange("departure")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                airportBoardTab === "departure"
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "departure"
                   ? "border-sky-500 text-white bg-white/5"
                   : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+                }`}
             >
               Departures
             </button>
             <button
               type="button"
               onClick={() => onAirportBoardTabChange("arrival")}
-              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${
-                airportBoardTab === "arrival"
+              className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "arrival"
                   ? "border-sky-500 text-white bg-white/5"
                   : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+                }`}
             >
               Arrivals
             </button>
