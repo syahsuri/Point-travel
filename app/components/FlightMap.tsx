@@ -66,7 +66,6 @@ export default function FlightMap() {
   // Free-text filter for the flights list.
   const [query, setQuery] = useState("");
   const [sortDesc, setSortDesc] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<"flight" | "aircraft">("flight");
   // Where we predicted the selected plane would be by the next poll, so the next
   // poll can measure the forecast error. Plus the resulting error (km) for the HUD.
   const SHOW_CONFLICT_BADGE = false; // Set to true to re-enable
@@ -124,7 +123,6 @@ export default function FlightMap() {
 
   const {
     selectedAirport,
-    setSelectedAirport,
     airportBoardTab,
     setAirportBoardTab,
     schedule,

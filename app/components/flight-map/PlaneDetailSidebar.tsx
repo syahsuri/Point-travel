@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import type { StateVector, TripHistory } from "@/lib/types";
 import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
 
@@ -45,9 +45,14 @@ export default function PlaneDetailSidebar({
   const [aircraftOpen, setAircraftOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(true);
 
-  useEffect(() => {
+  // Reset to minimized whenever a different plane is selected. Doing this
+  // during render (compared against a ref) instead of in a useEffect avoids
+  // the synchronous setState-in-effect cascading-render lint error.
+  const prevIcao24Ref = useRef(selected.icao24);
+  if (prevIcao24Ref.current !== selected.icao24) {
+    prevIcao24Ref.current = selected.icao24;
     setIsMinimized(true);
-  }, [selected.icao24]);
+  }
 
   const aircraftPhoto = (
     <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
