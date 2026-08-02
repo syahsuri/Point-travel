@@ -1,5 +1,5 @@
 # Dockerfile
-FROM node:20-alpine
+FROM ghcr.io/synthetixio/docker-node/alpine:20.0
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
