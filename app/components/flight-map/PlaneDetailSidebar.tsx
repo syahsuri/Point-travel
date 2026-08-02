@@ -43,6 +43,7 @@ export default function PlaneDetailSidebar({
     selected.icao24
   );
   const [aircraftOpen, setAircraftOpen] = useState(true);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const aircraftPhoto = (
     <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
@@ -115,14 +116,14 @@ export default function PlaneDetailSidebar({
           </div>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
           onClick={onToggleFollow}
           aria-pressed={follow}
-          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+          className={`rounded px-2 py-1 text-[11px] font-medium ${
             follow
-              ? "bg-sky-500/80 text-white"
+              ? "bg-sky-500 text-white"
               : "bg-white/10 text-white/70 hover:bg-white/20"
           }`}
         >
@@ -130,9 +131,16 @@ export default function PlaneDetailSidebar({
         </button>
         <button
           type="button"
+          onClick={() => setIsMinimized((v) => !v)}
+          className="md:hidden rounded px-2 py-1 text-[11px] font-medium bg-white/10 text-white/70 hover:bg-white/20"
+        >
+          {isMinimized ? "Expand ▲" : "Minimize ▼"}
+        </button>
+        <button
+          type="button"
           onClick={onClose}
           aria-label="Close"
-          className="rounded px-1.5 text-base leading-none text-white/60 hover:bg-white/10 hover:text-white"
+          className="rounded px-1.5 text-lg leading-none text-white/60 hover:bg-white/10 hover:text-white"
         >
           ×
         </button>
@@ -231,33 +239,87 @@ export default function PlaneDetailSidebar({
   return (
     <>
       {/* ---------- MOBILE: single-column bottom sheet (< md) ---------- */}
-      <div className="md:hidden absolute z-20 flex flex-col overflow-hidden bg-black/80 text-xs text-white/85 backdrop-blur shadow-2xl bottom-0 left-0 w-full max-h-[75vh] rounded-t-xl border-t border-white/10">
-        {header}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {progressCard}
-          {replayBar}
-          {flightRows}
+      <div className="md:hidden absolute z-20 flex flex-col overflow-hidden bg-black/85 text-xs text-white/85 backdrop-blur-md shadow-2xl bottom-0 left-0 w-full rounded-t-2xl border-t border-white/15 transition-all">
+        {/* Drag handle bar */}
+        <button
+          type="button"
+          onClick={() => setIsMinimized((v) => !v)}
+          className="w-full pt-2 pb-1 flex items-center justify-center cursor-pointer select-none active:opacity-70"
+          aria-label={isMinimized ? "Expand sheet" : "Minimize sheet"}
+        >
+          <span className="h-1.5 w-10 rounded-full bg-white/30" />
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setAircraftOpen((v) => !v)}
-            className="flex w-full items-center justify-between border-y border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-white/80 hover:bg-white/10"
-            aria-expanded={aircraftOpen}
-          >
-            <span>Aircraft</span>
-            <span
-              className={`text-white/50 transition-transform ${aircraftOpen ? "rotate-180" : ""}`}
+        {isMinimized ? (
+          <div className="flex items-center justify-between px-3 py-2 pb-3">
+            <div
+              className="flex items-center gap-2 min-w-0 cursor-pointer"
+              onClick={() => setIsMinimized(false)}
             >
-              ▾
-            </span>
-          </button>
-          {aircraftOpen && (
-            <div>
-              {aircraftPhoto}
-              {aircraftRows}
+              <span
+                className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                  selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+                }`}
+              />
+              <span className="font-bold text-white truncate text-sm">
+                {(selected.callsign ?? "").trim() || selected.icao24}
+              </span>
+              {(selected.origin_iata || selected.destination_iata) && (
+                <span className="text-white/60 text-xs shrink-0">
+                  {selected.origin_iata ?? "???"} → {selected.destination_iata ?? "???"}
+                </span>
+              )}
             </div>
-          )}
-        </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsMinimized(false)}
+                className="rounded bg-sky-500/20 text-sky-300 px-2 py-1 text-[11px] font-medium"
+              >
+                Expand ▲
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="text-white/60 hover:text-white px-1 text-base leading-none"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col max-h-[75vh]">
+            {header}
+            <div className="flex-1 min-h-0 overflow-y-auto pb-4">
+              {progressCard}
+              {replayBar}
+              {flightRows}
+
+              <button
+                type="button"
+                onClick={() => setAircraftOpen((v) => !v)}
+                className="flex w-full items-center justify-between border-y border-white/10 bg-white/5 px-3 py-2 text-[11px] font-medium text-white/80 hover:bg-white/10"
+                aria-expanded={aircraftOpen}
+              >
+                <span>Aircraft</span>
+                <span
+                  className={`text-white/50 transition-transform ${
+                    aircraftOpen ? "rotate-180" : ""
+                  }`}
+                >
+                  ▾
+                </span>
+              </button>
+              {aircraftOpen && (
+                <div>
+                  {aircraftPhoto}
+                  {aircraftRows}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ---------- DESKTOP: side-by-side dual pane (>= md) ---------- */}

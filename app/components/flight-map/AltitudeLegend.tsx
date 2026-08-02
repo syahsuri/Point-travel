@@ -33,9 +33,9 @@ export default function AltitudeLegend({
     : null;
 
   return (
-    <div className="pointer-events-none absolute bottom-8 md:bottom-1 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1.5 rounded-lg border border-white/15 bg-black/55 px-4 pb-2.5 pt-3 backdrop-blur-md shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
+    <div className="pointer-events-none absolute bottom-7 md:bottom-1 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1 md:gap-1.5 rounded-lg border border-white/15 bg-black/60 px-2.5 py-1.5 md:px-4 md:pb-2.5 md:pt-3 backdrop-blur-md shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
       {/* Tiny label header */}
-      <div className="flex w-full items-center justify-between text-[8px] md:text-[9px] font-semibold uppercase tracking-widest text-white/50">
+      <div className="flex w-full items-center justify-between text-[7px] md:text-[9px] font-semibold uppercase tracking-widest text-white/50">
         <span>Ground</span>
         <span className="text-white/70">Altitude</span>
         <span>{maxAlt.toLocaleString("en-US")}m+</span>

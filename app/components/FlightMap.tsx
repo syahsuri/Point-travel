@@ -112,7 +112,12 @@ export default function FlightMap() {
   } = usePlaneSelection({
     mapRef,
     airportsRef,
-    onSelect: () => deselectAirport(),
+    onSelect: () => {
+      deselectAirport();
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setListOpen(false);
+      }
+    },
   });
 
   const {
@@ -124,7 +129,15 @@ export default function FlightMap() {
     scheduleLoading,
     selectAirport: selectAirportFromList,
     deselectAirport,
-  } = useAirportSelection({ mapRef, onSelect: () => deselectPlane() });
+  } = useAirportSelection({
+    mapRef,
+    onSelect: () => {
+      deselectPlane();
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setListOpen(false);
+      }
+    },
+  });
 
   const { conflictCount, turnRateRef, updateTurnRates, drawConflicts } =
     useNearMissRadar({ mapRef });
