@@ -8,7 +8,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    container: ghcr.io/synthetixio/docker-node/alpine:20.0
+    container: node:20-alpine
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
