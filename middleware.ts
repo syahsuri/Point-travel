@@ -7,7 +7,7 @@ import { signToken, verifyToken, COOKIE_NAME } from "@/lib/apiToken";
 // And env vars UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
 const ratelimit = new Ratelimit({
   redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(30, "60 s"), // 30 requests/min per IP
+  limiter: Ratelimit.slidingWindow(100, "60 s"), // 30 requests/min per IP
   analytics: true,
   prefix: "flighttracker",
 });
