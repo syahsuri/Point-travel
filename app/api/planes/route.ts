@@ -28,8 +28,7 @@ function toStateVector(r: RawState): StateVector | null {
   ) {
     return null; // skip empty {} / malformed entries
   }
-  const num = (v: unknown): number | null =>
-    typeof v === "number" ? v : null;
+  const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
   const str = (v: unknown): string | null =>
     typeof v === "string" && v !== "" ? v : null;
   return {
@@ -75,8 +74,8 @@ export async function GET() {
     const list: RawState[] = Array.isArray(raw)
       ? raw
       : Array.isArray((raw as { states?: unknown }).states)
-        ? ((raw as { states: RawState[] }).states)
-        : [];
+      ? (raw as { states: RawState[] }).states
+      : [];
 
     const parsed = list
       .map(toStateVector)
@@ -114,13 +113,16 @@ export async function GET() {
         typeof r.last_time_position === "string"
           ? reportSecs(r.last_time_position)
           : typeof r.last_contact === "number"
-            ? r.last_contact
-            : 0;
+          ? r.last_contact
+          : 0;
       return Math.max(max, t);
     }, Math.floor(Date.now() / 1000));
 
+    const payload = Buffer.from(JSON.stringify({ time, states })).toString(
+      "base64"
+    );
     return Response.json(
-      { time, states },
+      { data: payload },
       { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" } }
     );
   } catch (err) {

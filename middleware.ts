@@ -54,7 +54,7 @@ export async function middleware(req: NextRequest) {
       secure: true,
       sameSite: "strict",
       path: "/",
-      maxAge: 300,
+      maxAge: 21600,
     });
   }
   return res;

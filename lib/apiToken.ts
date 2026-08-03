@@ -1,7 +1,7 @@
 const encoder = new TextEncoder();
 
 const COOKIE_NAME = "api_session";
-const DEFAULT_TTL_SEC = 300; // 5 minutes — page reloads renew it
+const DEFAULT_TTL_SEC = 21600; // 5 minutes — page reloads renew it
 
 /**
  * Uses the Web Crypto API (globalThis.crypto.subtle) instead of Node's
