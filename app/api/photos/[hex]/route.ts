@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import type { PlanePhoto } from "@/lib/types";
+import { isSameOriginRequest } from "@/lib/sameOrigin";
 
 /**
  * Server-side proxy for Planespotters' public Photo API.
@@ -23,10 +24,6 @@ export const dynamic = "force-dynamic";
 const USER_AGENT = "PointTravel/1.0 (https://flight.gukgukcraft.id)";
 
 // Hosts allowed to call this route. Add localhost so local dev still works.
-const ALLOWED_HOSTS = new Set([
-  "flight.gukgukcraft.id",
-  ...(process.env.NODE_ENV !== "production" ? ["localhost:3000"] : []),
-]);
 
 type RawPhoto = {
   id?: string;
@@ -55,16 +52,6 @@ function toPlanePhoto(r: RawPhoto): PlanePhoto | null {
   };
 }
 
-function isSameOriginRequest(req: NextRequest): boolean {
-  const candidate = req.headers.get("origin") ?? req.headers.get("referer");
-  if (!candidate) return false;
-
-  try {
-    return ALLOWED_HOSTS.has(new URL(candidate).host);
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(
   req: NextRequest,
