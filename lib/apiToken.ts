@@ -1,7 +1,7 @@
 const encoder = new TextEncoder();
 
 const COOKIE_NAME = "api_session";
-const DEFAULT_TTL_SEC = 300; 
+const DEFAULT_TTL_SEC = 300; // 5 minutes — page reloads renew it
 
 /**
  * Uses the Web Crypto API (globalThis.crypto.subtle) instead of Node's
@@ -29,12 +29,17 @@ function toHex(buf: ArrayBuffer): string {
     .join("");
 }
 
-function fromHex(hex: string): Uint8Array {
+function fromHex(hex: string): BufferSource {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
-  return bytes;
+  // Cast via unknown: avoids fighting whichever way this TS/lib version
+  // types Uint8Array's generic buffer parameter (it differs across
+  // TS versions — sometimes generic, sometimes not). BufferSource is
+  // what crypto.subtle.verify actually wants, and a plain Uint8Array
+  // satisfies it at runtime regardless of the compile-time generic shape.
+  return bytes as unknown as BufferSource;
 }
 
 /** Creates a signed token: `<payload>.<expiry>.<hmac-hex>` */
