@@ -3,13 +3,33 @@
 import type { StateVector, Airport } from "@/lib/types";
 import { timeAgo, posSecs } from "@/lib/format";
 
+function makePlaneComparator(
+  sortDesc: boolean,
+  selectedIcao24: string | null | undefined
+) {
+  return (a: StateVector, b: StateVector) => {
+    if (selectedIcao24) {
+      const aSel = a.icao24 === selectedIcao24;
+      const bSel = b.icao24 === selectedIcao24;
+      if (aSel && !bSel) return -1;
+      if (bSel && !aSel) return 1;
+    }
+    const tA = posSecs(a.last_time_position);
+    const tB = posSecs(b.last_time_position);
+    const valA = Number.isNaN(tA) ? 0 : tA;
+    const valB = Number.isNaN(tB) ? 0 : tB;
+    if (valA !== valB) return sortDesc ? valB - valA : valA - valB;
+    return (a.callsign ?? "").localeCompare(b.callsign ?? "");
+  };
+}
+
 type SidePanelProps = {
   panelTab: "flights" | "airports";
   onPanelTabChange: (tab: "flights" | "airports") => void;
   listOpen: boolean;
   onToggleListOpen: () => void;
   /** When true (TravelBadge expanded on mobile), collapses the mobile
-    *  trigger pill down to icon-only so the two controls don't collide. */
+   *  trigger pill down to icon-only so the two controls don't collide. */
   compact?: boolean;
 
   // Flights tab
@@ -73,13 +93,15 @@ export default function SidePanel({
         <button
           type="button"
           onClick={onToggleListOpen}
-          className={`md:hidden absolute right-2 top-2 z-20 flex h-9 items-center overflow-hidden rounded-lg border border-white/10 bg-black/65 text-xs font-medium text-white/90 backdrop-blur-md shadow-lg hover:bg-white/10 active:scale-95 transition-all duration-300 ease-out ${compact ? "w-9 justify-center px-0 gap-0" : "w-auto gap-1.5 px-3"
-            }`}
+          className={`md:hidden absolute right-2 top-2 z-20 flex h-9 items-center overflow-hidden rounded-lg border border-white/10 bg-black/65 text-xs font-medium text-white/90 backdrop-blur-md shadow-lg hover:bg-white/10 active:scale-95 transition-all duration-300 ease-out ${
+            compact ? "w-9 justify-center px-0 gap-0" : "w-auto gap-1.5 px-3"
+          }`}
         >
           <span className="shrink-0">🔍</span>
           <span
-            className={`whitespace-nowrap transition-all duration-300 ${compact ? "max-w-0 opacity-0" : "max-w-[160px] opacity-100"
-              }`}
+            className={`whitespace-nowrap transition-all duration-300 ${
+              compact ? "max-w-0 opacity-0" : "max-w-40 opacity-100"
+            }`}
           >
             {panelTab === "flights"
               ? `Flights (${planeList.length})`
@@ -112,20 +134,22 @@ export default function SidePanel({
             <button
               type="button"
               onClick={() => onPanelTabChange("flights")}
-              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${panelTab === "flights"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
+              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${
+                panelTab === "flights"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
             >
               Flights ({planeList.length})
             </button>
             <button
               type="button"
               onClick={() => onPanelTabChange("airports")}
-              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${panelTab === "airports"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-                }`}
+              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${
+                panelTab === "airports"
+                  ? "border-sky-500 text-white bg-white/5"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
             >
               Airports ({airportList.length})
             </button>
@@ -151,19 +175,14 @@ export default function SidePanel({
               </div>
               <ul className="divide-y divide-white/10 overflow-y-auto flex-1 text-xs">
                 {[...filteredPlanes]
-                  .sort((a, b) => {
-                    const tA = posSecs(a.last_time_position);
-                    const tB = posSecs(b.last_time_position);
-                    const valA = Number.isNaN(tA) ? 0 : tA;
-                    const valB = Number.isNaN(tB) ? 0 : tB;
-                    if (valA !== valB) return sortDesc ? valB - valA : valA - valB;
-                    return (a.callsign ?? "").localeCompare(b.callsign ?? "");
-                  })
+                  .sort(makePlaneComparator(sortDesc, selectedIcao24))
                   .map((p) => {
                     const cs = (p.callsign ?? "").trim() || p.icao24;
                     const alt =
                       typeof p.baro_altitude === "number"
-                        ? `${Math.round(p.baro_altitude * 3.281).toLocaleString()} ft`
+                        ? `${Math.round(
+                            p.baro_altitude * 3.281
+                          ).toLocaleString()} ft`
                         : "—";
                     const spd =
                       typeof p.velocity === "number"
@@ -171,23 +190,29 @@ export default function SidePanel({
                         : "—";
                     const route =
                       p.origin_iata || p.destination_iata
-                        ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"}`
+                        ? `${p.origin_iata ?? "???"} → ${
+                            p.destination_iata ?? "???"
+                          }`
                         : null;
                     const ago = timeAgo(p.last_time_position);
-                    const meta = [p.flight_status, ago].filter(Boolean).join(" · ");
+                    const meta = [p.flight_status, ago]
+                      .filter(Boolean)
+                      .join(" · ");
                     return (
                       <li key={p.icao24}>
                         <button
                           type="button"
                           onClick={() => handleSelectPlane(p)}
-                          className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/25" : ""
-                            }`}
+                          className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${
+                            selectedIcao24 === p.icao24 ? "bg-sky-500/25" : ""
+                          }`}
                         >
                           <span className="flex w-full items-center justify-between gap-2">
                             <span className="flex items-center gap-2 truncate">
                               <span
-                                className={`inline-block h-2 w-2 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                                  }`}
+                                className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                                  p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                                }`}
                               />
                               <span className="truncate font-semibold text-white text-sm">
                                 {cs}
@@ -225,23 +250,28 @@ export default function SidePanel({
               <ul className="divide-y divide-white/10 overflow-y-auto flex-1 text-xs">
                 {filteredAirports.map((a, i) => (
                   <li
-                    key={`${a.icao_code ?? a.iata_code ?? a.name}-${a.latitude_deg}-${a.longitude_deg}-${i}`}
+                    key={`${a.icao_code ?? a.iata_code ?? a.name}-${
+                      a.latitude_deg
+                    }-${a.longitude_deg}-${i}`}
                   >
                     <button
                       type="button"
                       onClick={() => handleSelectAirport(a)}
-                      className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${selectedAirport?.icao_code === a.icao_code &&
+                      className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${
+                        selectedAirport?.icao_code === a.icao_code &&
                         selectedAirport?.name === a.name
-                        ? "bg-sky-500/25"
-                        : ""
-                        }`}
+                          ? "bg-sky-500/25"
+                          : ""
+                      }`}
                     >
                       <span className="flex w-full items-center justify-between gap-2">
                         <span className="truncate font-semibold text-white text-sm">
                           {a.name}
                         </span>
                         <span className="shrink-0 text-sky-400 font-mono text-xs">
-                          {[a.iata_code, a.icao_code].filter(Boolean).join(" / ") || "—"}
+                          {[a.iata_code, a.icao_code]
+                            .filter(Boolean)
+                            .join(" / ") || "—"}
                         </span>
                       </span>
                       <span className="text-xs text-white/50">
@@ -263,20 +293,22 @@ export default function SidePanel({
           <button
             type="button"
             onClick={() => onPanelTabChange("flights")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "flights"
-              ? "border-sky-500 text-white bg-white/5"
-              : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
+              panelTab === "flights"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
           >
             Flights ({planeList.length})
           </button>
           <button
             type="button"
             onClick={() => onPanelTabChange("airports")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "airports"
-              ? "border-sky-500 text-white bg-white/5"
-              : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
+              panelTab === "airports"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
           >
             Airports ({airportList.length})
           </button>
@@ -314,19 +346,14 @@ export default function SidePanel({
             </div>
             <ul className="divide-y divide-white/5 overflow-y-auto">
               {[...filteredPlanes]
-                .sort((a, b) => {
-                  const tA = posSecs(a.last_time_position);
-                  const tB = posSecs(b.last_time_position);
-                  const valA = Number.isNaN(tA) ? 0 : tA;
-                  const valB = Number.isNaN(tB) ? 0 : tB;
-                  if (valA !== valB) return sortDesc ? valB - valA : valA - valB;
-                  return (a.callsign ?? "").localeCompare(b.callsign ?? "");
-                })
+                .sort(makePlaneComparator(sortDesc, selectedIcao24))
                 .map((p) => {
                   const cs = (p.callsign ?? "").trim() || p.icao24;
                   const alt =
                     typeof p.baro_altitude === "number"
-                      ? `${Math.round(p.baro_altitude * 3.281).toLocaleString()} ft`
+                      ? `${Math.round(
+                          p.baro_altitude * 3.281
+                        ).toLocaleString()} ft`
                       : "—";
                   const spd =
                     typeof p.velocity === "number"
@@ -334,25 +361,33 @@ export default function SidePanel({
                       : "—";
                   const route =
                     p.origin_iata || p.destination_iata
-                      ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"}`
+                      ? `${p.origin_iata ?? "???"} → ${
+                          p.destination_iata ?? "???"
+                        }`
                       : null;
                   const ago = timeAgo(p.last_time_position);
-                  const meta = [p.flight_status, ago].filter(Boolean).join(" · ");
+                  const meta = [p.flight_status, ago]
+                    .filter(Boolean)
+                    .join(" · ");
                   return (
                     <li key={p.icao24}>
                       <button
                         type="button"
                         onClick={() => handleSelectPlane(p)}
-                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/20" : ""
-                          }`}
+                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
+                          selectedIcao24 === p.icao24 ? "bg-sky-500/20" : ""
+                        }`}
                       >
                         <span className="flex w-full items-center justify-between gap-2">
                           <span className="flex items-center gap-1.5 truncate">
                             <span
-                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                                }`}
+                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                                p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                              }`}
                             />
-                            <span className="truncate font-medium text-white/90">{cs}</span>
+                            <span className="truncate font-medium text-white/90">
+                              {cs}
+                            </span>
                           </span>
                           <span className="shrink-0 text-white/50">
                             {alt} · {spd}
@@ -386,21 +421,28 @@ export default function SidePanel({
             <ul className="divide-y divide-white/5 overflow-y-auto">
               {filteredAirports.map((a, i) => (
                 <li
-                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${a.latitude_deg}-${a.longitude_deg}-${i}`}
+                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${
+                    a.latitude_deg
+                  }-${a.longitude_deg}-${i}`}
                 >
                   <button
                     type="button"
                     onClick={() => handleSelectAirport(a)}
-                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedAirport?.icao_code === a.icao_code &&
+                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
+                      selectedAirport?.icao_code === a.icao_code &&
                       selectedAirport?.name === a.name
-                      ? "bg-sky-500/20"
-                      : ""
-                      }`}
+                        ? "bg-sky-500/20"
+                        : ""
+                    }`}
                   >
                     <span className="flex w-full items-center justify-between gap-2">
-                      <span className="truncate font-medium text-white/90">{a.name}</span>
+                      <span className="truncate font-medium text-white/90">
+                        {a.name}
+                      </span>
                       <span className="shrink-0 text-white/50">
-                        {[a.iata_code, a.icao_code].filter(Boolean).join(" / ") || "—"}
+                        {[a.iata_code, a.icao_code]
+                          .filter(Boolean)
+                          .join(" / ") || "—"}
                       </span>
                     </span>
                     <span className="pl-0.5 text-[10px] text-white/45">

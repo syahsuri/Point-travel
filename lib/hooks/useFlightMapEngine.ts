@@ -8,6 +8,7 @@ import { loadAirports } from "@/lib/airports";
 import { setBasemap, BASE_STYLE } from "@/lib/mapStyle";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
 import { readPlanesCache, writePlanesCache } from "@/lib/planesCache";
+import { posSecs } from "@/lib/format";
 
 import {
   deadReckon,
@@ -33,6 +34,7 @@ type UseFlightMapEngineArgs = {
   setAirports: (v: Record<string, [number, number]>) => void;
   setAirportList: (v: Airport[]) => void;
   setPlaneList: (v: StateVector[]) => void;
+  onReady?: () => void;
   // Plane selection (from usePlaneSelection)
   selectPlane: (p: StateVector) => void;
   deselectPlane: () => void;
@@ -101,6 +103,7 @@ export function useFlightMapEngine({
   setAirports,
   setAirportList,
   setPlaneList,
+  onReady,
   selectPlane,
   deselectPlane,
   setSelectedAirport,
@@ -660,6 +663,8 @@ export function useFlightMapEngine({
           }
         });
 
+        onReady?.();
+        
         map.on("click", "planes", (e) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -692,6 +697,8 @@ export function useFlightMapEngine({
 
         // ---- Animate loop: dead-reckons plane positions between polls ----
         let lastDraw = 0;
+        const displayedPos = new Map<string, [number, number]>();
+        const EASE = 0.22;
         const animate = () => {
           rafId = requestAnimationFrame(animate);
           const now = performance.now();
@@ -699,19 +706,48 @@ export function useFlightMapEngine({
           lastDraw = now;
           const src = map.getSource("planes") as GeoJSONSource | undefined;
           if (!src) return;
-          const dt = (Date.now() - baseTimeRef.current) / 1000;
+          const nowSec = Date.now() / 1000;
+          const seen = new Set<string>();
           const moved = planesRef.current.map((p) => {
-            if (p.on_ground) return p;
-            const [lng, lat] = deadReckon(
+            seen.add(p.icao24);
+            if (p.on_ground) {
+              displayedPos.delete(p.icao24);
+              return p;
+            }
+            const reportSec = posSecs(p.last_time_position);
+            const dt = Number.isNaN(reportSec)
+              ? (Date.now() - baseTimeRef.current) / 1000 
+              : Math.max(0, Math.min(nowSec - reportSec, 120)); 
+              const omega = turnRateRef.current.get(p.icao24) ?? 0;
+              const avgHeading =
+                typeof p.true_track === "number"
+                ? p.true_track + omega * (dt / 2)
+                : p.true_track;
+              const [targetLng, targetLat] = deadReckon(
               p.longitude,
               p.latitude,
               p.velocity,
-              p.true_track,
+              avgHeading,
               dt
             );
+            const prev = displayedPos.get(p.icao24);
+            let lng: number;
+            let lat: number;
+            if (!prev) {
+              lng = targetLng;
+              lat = targetLat;
+            } else{
+              lng = prev[0] + (targetLng - prev[0]) * EASE;
+              lat = prev[1] + (targetLat - prev[1]) * EASE
+            }
+            displayedPos.set(p.icao24, [lng, lat]);
             return { ...p, longitude: lng, latitude: lat };
           });
+          for (const icao of displayedPos.keys()) {
+            if (!seen.has(icao)) displayedPos.delete(icao);
+          }
           src.setData(planesToGeoJSON(moved));
+
           const selIcao = selectedIcaoRef.current;
           if (!selIcao) return;
           const sel = moved.find((p) => p.icao24 === selIcao);
@@ -752,18 +788,18 @@ export function useFlightMapEngine({
             destSrc.setData(
               destCoord
                 ? {
-                  type: "FeatureCollection",
-                  features: [
-                    {
-                      type: "Feature",
-                      geometry: {
-                        type: "LineString",
-                        coordinates: greatCircle(head, destCoord),
+                    type: "FeatureCollection",
+                    features: [
+                      {
+                        type: "Feature",
+                        geometry: {
+                          type: "LineString",
+                          coordinates: greatCircle(head, destCoord),
+                        },
+                        properties: {},
                       },
-                      properties: {},
-                    },
-                  ],
-                }
+                    ],
+                  }
                 : { type: "FeatureCollection", features: [] }
             );
           }
@@ -772,12 +808,12 @@ export function useFlightMapEngine({
           const ppathRaw = sel.on_ground
             ? []
             : predictPath(
-              sel.longitude,
-              sel.latitude,
-              sel.velocity,
-              sel.true_track,
-              omega
-            );
+                sel.longitude,
+                sel.latitude,
+                sel.velocity,
+                sel.true_track,
+                omega
+              );
           const ppath =
             ppathRaw.length >= 3 ? smoothPath(ppathRaw, 1) : ppathRaw;
           pred?.setData({
@@ -785,12 +821,12 @@ export function useFlightMapEngine({
             features:
               ppath.length >= 2
                 ? [
-                  {
-                    type: "Feature",
-                    geometry: { type: "LineString", coordinates: ppath },
-                    properties: {},
-                  },
-                ]
+                    {
+                      type: "Feature",
+                      geometry: { type: "LineString", coordinates: ppath },
+                      properties: {},
+                    },
+                  ]
                 : [],
           });
           const turning = !sel.on_ground && Math.abs(omega) >= 0.15;
@@ -801,12 +837,12 @@ export function useFlightMapEngine({
             type: "FeatureCollection",
             features: turning
               ? [
-                {
-                  type: "Feature",
-                  geometry: { type: "Point", coordinates: head },
-                  properties: {},
-                },
-              ]
+                  {
+                    type: "Feature",
+                    geometry: { type: "Point", coordinates: head },
+                    properties: {},
+                  },
+                ]
               : [],
           });
           const selectedMarker = selectedMarkerRef.current;

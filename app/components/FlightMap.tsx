@@ -28,6 +28,7 @@ import PlaneDetailSidebar from "@/components/flight-map/PlaneDetailSidebar";
 import AltitudeLegend from "@/components/flight-map/AltitudeLegend";
 import AirportDetailSidebar from "@/components/flight-map/AirportDetailSidebar";
 import MapAttribution from "@/components/flight-map/MapAttribution";
+import LoadingScreen from "@/components/flight-map/LoadingScreen";
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -78,6 +79,7 @@ export default function FlightMap() {
 
   const [chaosMode, setChaosMode] = useState(false);
   const [travelBadgeExpanded, setTravelBadgeExpanded] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   function resetMapView() {
     const map = mapRef.current;
@@ -196,6 +198,7 @@ export default function FlightMap() {
     setAirports,
     setAirportList,
     setPlaneList,
+    onReady: () => setMapReady(true),
     selectPlane,
     deselectPlane,
     setSelectedAirport: (a) => {
@@ -397,6 +400,8 @@ export default function FlightMap() {
         className="absolute inset-0"
         style={{ position: "absolute", inset: 0 }}
       />
+      
+      <LoadingScreen visible={!mapReady} />
 
       <ChaosOverlay active={chaosMode} />
       {SHOW_CONFLICT_BADGE && <ConflictBadge conflictCount={conflictCount} />}
