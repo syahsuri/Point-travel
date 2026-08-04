@@ -6,6 +6,7 @@ import type { NextRequest } from "next/server";
  */
 const ALLOWED_HOSTS = new Set([
   "flight.gukgukcraft.id",
+  "flight.co.id",
   ...(process.env.NODE_ENV !== "production" ? ["localhost:3000"] : []),
 ]);
 

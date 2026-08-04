@@ -21,8 +21,7 @@ export const dynamic = "force-dynamic";
 
 // NOTE: replace with your actual deployed domain/contact per Planespotters'
 // terms — a generic User-Agent may get throttled or blocked.
-const USER_AGENT = "PointTravel/1.0 (https://flight.gukgukcraft.id)";
-
+const USER_AGENT = "PointTravel/1.0 (https://flight.co.id, https://flight.gukgukcraft.id)";
 // Hosts allowed to call this route. Add localhost so local dev still works.
 
 type RawPhoto = {
