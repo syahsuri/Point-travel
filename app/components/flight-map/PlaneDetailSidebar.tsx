@@ -56,22 +56,32 @@ export default function PlaneDetailSidebar({
   const setIsMinimized = (value: boolean | ((prev: boolean) => boolean)) =>
     setMinimizedState((s) => ({
       ...s,
-      isMinimized:
-        typeof value === "function" ? value(s.isMinimized) : value,
+      isMinimized: typeof value === "function" ? value(s.isMinimized) : value,
     }));
 
   const aircraftPhoto = (
     <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
       <div className="relative aspect-video w-full overflow-hidden rounded border border-white/10 bg-black/40">
-        <img
-          src={planePhoto?.thumbnailLarge.src ?? "/images/plane-placeholder.png"}
-          alt={
-            planePhoto
-              ? `Aircraft photographed by ${planePhoto.photographer}`
-              : "Aircraft"
-          }
-          className="w-full h-full object-cover opacity-90"
-        />
+        {planePhoto ? (
+          <a
+            href={planePhoto.link}
+            target="_blank"
+            rel="noopener"
+            className="block h-full w-full cursor-pointer"
+          >
+            <img
+              src={planePhoto.thumbnailLarge.src}
+              alt={`Aircraft photographed by ${planePhoto.photographer}`}
+              className="w-full h-full object-cover opacity-90"
+            />
+          </a>
+        ) : (
+          <img
+            src="/images/plane-placeholder.png"
+            alt="Aircraft"
+            className="w-full h-full object-cover opacity-90"
+          />
+        )}
         {planePhotoLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] text-white/60">
             Loading photo…
@@ -87,7 +97,8 @@ export default function PlaneDetailSidebar({
         <div className="mt-1 flex items-center justify-between text-[10px] text-white/45">
           <span>Photo by {planePhoto.photographer}</span>
 
-          <a href={planePhoto.link}
+          <a
+            href={planePhoto.link}
             target="_blank"
             rel="noopener"
             className="text-sky-400 underline hover:text-sky-300"
@@ -117,8 +128,9 @@ export default function PlaneDetailSidebar({
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <span
-            className={`inline-block h-2 w-2 shrink-0 rounded-full ${selected.on_ground ? "bg-white/40" : "bg-emerald-400"
-              }`}
+            className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+              selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+            }`}
           />
           <span className="truncate text-sm font-semibold text-white">
             {(selected.callsign ?? "").trim() || selected.icao24}
@@ -126,7 +138,8 @@ export default function PlaneDetailSidebar({
         </div>
         {(selected.origin_iata || selected.destination_iata) && (
           <div className="mt-0.5 text-white/60">
-            {selected.origin_iata ?? "???"} → {selected.destination_iata ?? "???"}
+            {selected.origin_iata ?? "???"} →{" "}
+            {selected.destination_iata ?? "???"}
           </div>
         )}
       </div>
@@ -135,10 +148,11 @@ export default function PlaneDetailSidebar({
           type="button"
           onClick={onToggleFollow}
           aria-pressed={follow}
-          className={`rounded px-2 py-1 text-[11px] font-medium ${follow
-            ? "bg-sky-500 text-white"
-            : "bg-white/10 text-white/70 hover:bg-white/20"
-            }`}
+          className={`rounded px-2 py-1 text-[11px] font-medium ${
+            follow
+              ? "bg-sky-500 text-white"
+              : "bg-white/10 text-white/70 hover:bg-white/20"
+          }`}
         >
           Follow
         </button>
@@ -270,15 +284,17 @@ export default function PlaneDetailSidebar({
               onClick={() => setIsMinimized(false)}
             >
               <span
-                className={`inline-block h-2 w-2 shrink-0 rounded-full ${selected.on_ground ? "bg-white/40" : "bg-emerald-400"
-                  }`}
+                className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                  selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+                }`}
               />
               <span className="font-bold text-white truncate text-sm">
                 {(selected.callsign ?? "").trim() || selected.icao24}
               </span>
               {(selected.origin_iata || selected.destination_iata) && (
                 <span className="text-white/60 text-xs shrink-0">
-                  {selected.origin_iata ?? "???"} → {selected.destination_iata ?? "???"}
+                  {selected.origin_iata ?? "???"} →{" "}
+                  {selected.destination_iata ?? "???"}
                 </span>
               )}
             </div>
@@ -316,8 +332,9 @@ export default function PlaneDetailSidebar({
               >
                 <span>Aircraft</span>
                 <span
-                  className={`text-white/50 transition-transform ${aircraftOpen ? "rotate-180" : ""
-                    }`}
+                  className={`text-white/50 transition-transform ${
+                    aircraftOpen ? "rotate-180" : ""
+                  }`}
                 >
                   ▾
                 </span>
@@ -349,12 +366,17 @@ export default function PlaneDetailSidebar({
           onClick={() => setAircraftOpen((v) => !v)}
           aria-expanded={aircraftOpen}
           aria-label="Toggle aircraft details"
-          className={`flex w-5 shrink-0 items-center justify-center border-l border-white/10 transition-colors ${aircraftOpen
-            ? "bg-white/5 text-white/50 hover:bg-white/10"
-            : "bg-sky-500/80 text-white hover:bg-sky-500"
-            }`}
+          className={`flex w-5 shrink-0 items-center justify-center border-l border-white/10 transition-colors ${
+            aircraftOpen
+              ? "bg-white/5 text-white/50 hover:bg-white/10"
+              : "bg-sky-500/80 text-white hover:bg-sky-500"
+          }`}
         >
-          <span className={`text-sm transition-transform ${aircraftOpen ? "" : "rotate-180"}`}>
+          <span
+            className={`text-sm transition-transform ${
+              aircraftOpen ? "" : "rotate-180"
+            }`}
+          >
             ‹
           </span>
         </button>
