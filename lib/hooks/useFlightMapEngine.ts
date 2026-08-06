@@ -56,6 +56,7 @@ type UseFlightMapEngineArgs = {
   setAccuracyKm: (v: number | null) => void;
   updateTurnRates: (list: StateVector[]) => void;
   drawConflicts: (list: StateVector[]) => void;
+  displayedPositionsRef: RefObject<Map<string, [number, number]>>;
 };
 
 /**
@@ -66,6 +67,14 @@ type UseFlightMapEngineArgs = {
  *
  * Runs once on mount. Cleans up the map instance on unmount.
  */
+const RENDER_DELAY_MS = 16_000; // sedikit di atas POLL_MS biar keyframe kedua selalu siap
+
+type Keyframe = { t: number; lon: number; lat: number; track: number | null };
+
+function keyframeTime(p: StateVector, fallbackSec: number): number {
+  const parsed = posSecs(p.last_time_position);
+  return Number.isNaN(parsed) ? fallbackSec : parsed;
+}
 
 function planesToGeoJSON(
   planes: StateVector[]
@@ -100,6 +109,7 @@ export function useFlightMapEngine({
   mapRef,
   airportsRef,
   planesRef,
+  
   setAirports,
   setAirportList,
   setPlaneList,
@@ -121,6 +131,7 @@ export function useFlightMapEngine({
   setAccuracyKm,
   updateTurnRates,
   drawConflicts,
+  displayedPositionsRef,
 }: UseFlightMapEngineArgs) {
   useEffect(() => {
     if (!containerRef.current) return;
@@ -158,6 +169,16 @@ export function useFlightMapEngine({
 
     let pollId: ReturnType<typeof setTimeout> | undefined;
     let rafId: number | undefined;
+    const keyframesRef = new Map<string, Keyframe[]>();
+    function pushKeyframe(p: StateVector, fallbackSec: number) {
+      if (p.on_ground) return; // pesawat di darat gak perlu di-buffer
+      const t = keyframeTime(p, fallbackSec);
+      const arr = keyframesRef.get(p.icao24) ?? [];
+      if (arr.length && arr[arr.length - 1].t === t) return; // report duplikat
+      arr.push({ t, lon: p.longitude, lat: p.latitude, track: p.true_track });
+      if (arr.length > 2) arr.shift();
+      keyframesRef.set(p.icao24, arr);
+    }
 
     map.on("error", (e) => console.error("[map]", e?.error ?? e));
 
@@ -246,6 +267,9 @@ export function useFlightMapEngine({
         planesRef.current = planes;
         updateTurnRates(planes);
         baseTimeRef.current = Date.now();
+
+        const seedSec = Date.now() / 1000;
+        for (const p of planes) pushKeyframe(p, seedSec);
 
         // ---- Sources & layers ----
 
@@ -664,7 +688,7 @@ export function useFlightMapEngine({
         });
 
         onReady?.();
-        
+
         map.on("click", "planes", (e) => {
           const f = e.features?.[0];
           if (!f) return;
@@ -697,54 +721,82 @@ export function useFlightMapEngine({
 
         // ---- Animate loop: dead-reckons plane positions between polls ----
         let lastDraw = 0;
-        const displayedPos = new Map<string, [number, number]>();
-        const EASE = 0.22;
         const animate = () => {
           rafId = requestAnimationFrame(animate);
           const now = performance.now();
           if (now - lastDraw < 100) return;
           lastDraw = now;
+
           const src = map.getSource("planes") as GeoJSONSource | undefined;
           if (!src) return;
-          const nowSec = Date.now() / 1000;
-          const seen = new Set<string>();
+          const renderTimeSec = (Date.now() - RENDER_DELAY_MS) / 1000;
           const moved = planesRef.current.map((p) => {
-            seen.add(p.icao24);
-            if (p.on_ground) {
-              displayedPos.delete(p.icao24);
-              return p;
+            if (p.on_ground) return p;
+            const kfs = keyframesRef.get(p.icao24);
+            if (!kfs || kfs.length === 0) return p;
+
+            if (kfs.length === 1) {
+              // pesawat baru muncul, baru ada 1 titik nyata
+              const [k0] = kfs;
+              const dt = Math.max(0, renderTimeSec - k0.t);
+              if (
+                dt <= 0 ||
+                typeof p.velocity !== "number" ||
+                typeof k0.track !== "number"
+              ) {
+                return { ...p, longitude: k0.lon, latitude: k0.lat };
+              }
+              const [lon, lat] = deadReckon(
+                k0.lon,
+                k0.lat,
+                p.velocity,
+                k0.track,
+                dt
+              );
+              return { ...p, longitude: lon, latitude: lat };
             }
-            const reportSec = posSecs(p.last_time_position);
-            const dt = Number.isNaN(reportSec)
-              ? (Date.now() - baseTimeRef.current) / 1000 
-              : Math.max(0, Math.min(nowSec - reportSec, 120)); 
-              const omega = turnRateRef.current.get(p.icao24) ?? 0;
-              const avgHeading =
-                typeof p.true_track === "number"
-                ? p.true_track + omega * (dt / 2)
-                : p.true_track;
-              const [targetLng, targetLat] = deadReckon(
-              p.longitude,
-              p.latitude,
+
+            const [k0, k1] = kfs;
+            if (renderTimeSec <= k0.t) {
+              return { ...p, longitude: k0.lon, latitude: k0.lat };
+            }
+            if (renderTimeSec <= k1.t) {
+              // kondisi normal: interpolasi di antara 2 titik nyata
+              const span = k1.t - k0.t;
+              const frac = span > 0 ? (renderTimeSec - k0.t) / span : 1;
+              return {
+                ...p,
+                longitude: k0.lon + (k1.lon - k0.lon) * frac,
+                latitude: k0.lat + (k1.lat - k0.lat) * frac,
+              };
+            }
+
+            // poll berikutnya telat / buffer habis -> fallback dead-reckon
+            const dt = renderTimeSec - k1.t;
+            const omega = turnRateRef.current.get(p.icao24) ?? 0;
+            const heading =
+              typeof k1.track === "number"
+                ? k1.track + omega * (dt / 2)
+                : k1.track;
+            if (typeof p.velocity !== "number" || typeof heading !== "number") {
+              return { ...p, longitude: k1.lon, latitude: k1.lat };
+            }
+            const [lon, lat] = deadReckon(
+              k1.lon,
+              k1.lat,
               p.velocity,
-              avgHeading,
+              heading,
               dt
             );
-            const prev = displayedPos.get(p.icao24);
-            let lng: number;
-            let lat: number;
-            if (!prev) {
-              lng = targetLng;
-              lat = targetLat;
-            } else{
-              lng = prev[0] + (targetLng - prev[0]) * EASE;
-              lat = prev[1] + (targetLat - prev[1]) * EASE
-            }
-            displayedPos.set(p.icao24, [lng, lat]);
-            return { ...p, longitude: lng, latitude: lat };
+            return { ...p, longitude: lon, latitude: lat };
           });
-          for (const icao of displayedPos.keys()) {
-            if (!seen.has(icao)) displayedPos.delete(icao);
+          for (const mp of moved) {
+            if (!mp.on_ground) {
+              displayedPositionsRef.current.set(mp.icao24, [
+                mp.longitude,
+                mp.latitude,
+              ]);
+            }
           }
           src.setData(planesToGeoJSON(moved));
 
@@ -865,11 +917,21 @@ export function useFlightMapEngine({
             if (res.time > lastApiTimeRef.current) {
               const next = res.states;
               lastApiTimeRef.current = res.time;
+
               setPlaneList(next);
               planesRef.current = next;
               updateTurnRates(next);
               drawConflicts(next);
               baseTimeRef.current = Date.now();
+              const pollSec = Date.now() / 1000;
+              const seenIcaos = new Set<string>();
+              for (const p of next) {
+                seenIcaos.add(p.icao24);
+                pushKeyframe(p, pollSec);
+              }
+              for (const icao of keyframesRef.keys()) {
+                if (!seenIcaos.has(icao)) keyframesRef.delete(icao);
+              }
               writePlanesCache({
                 time: res.time,
                 fetchedAt: Date.now(),

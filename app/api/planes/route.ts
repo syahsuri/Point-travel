@@ -42,6 +42,7 @@ function toStateVector(r: RawState): StateVector | null {
     geo_altitude: num(r.geo_altitude),
     on_ground: r.on_ground === true,
     velocity: num(r.velocity),
+    signal_age: num(r.signal_age),
     true_track: num(r.true_track),
     // Enriched backend fields.
     trip_id: str(r.trip_id),

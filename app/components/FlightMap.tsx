@@ -77,6 +77,8 @@ export default function FlightMap() {
   // Unix seconds timestamp of the last processed backend API update (from res.time).
   const lastApiTimeRef = useRef<number>(0);
 
+  const displayedPositionsRef = useRef<Map<string, [number, number]>>(new Map());
+
   const [chaosMode, setChaosMode] = useState(false);
   const [travelBadgeExpanded, setTravelBadgeExpanded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -115,6 +117,7 @@ export default function FlightMap() {
   } = usePlaneSelection({
     mapRef,
     airportsRef,
+    displayedPositionsRef,
     onSelect: () => {
       deselectAirport();
       if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -195,6 +198,7 @@ export default function FlightMap() {
     mapRef,
     airportsRef,
     planesRef,
+    displayedPositionsRef,
     setAirports,
     setAirportList,
     setPlaneList,

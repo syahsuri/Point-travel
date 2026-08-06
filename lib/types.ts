@@ -31,6 +31,7 @@ export interface StateVector {
   /** Heading: decimal degrees clockwise from north (0 = north). */
   true_track: number | null;
 
+  signal_age: number | null;
   // --- Enriched fields from the gukgukcraft backend (all optional; may be
   // null when the backend can't resolve them). Not part of raw OpenSky. ---
 
@@ -64,6 +65,7 @@ export interface StateVector {
   scheduled_arrival: string | null;
   /** Human flight phase, e.g. "Descending", "Cruising". */
   flight_status: string | null;
+
 }
 
 /**

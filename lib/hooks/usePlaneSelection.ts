@@ -15,6 +15,7 @@ import type { StateVector, TripHistory } from "@/lib/types";
 type UsePlaneSelectionArgs = {
   mapRef: RefObject<maplibregl.Map | null>;
   airportsRef: RefObject<Record<string, [number, number]>>;
+  displayedPositionsRef: RefObject<Map<string, [number, number]>>;
   onSelect: () => void; // called to close any open airport selection first
 };
 
@@ -33,6 +34,7 @@ type UsePlaneSelectionArgs = {
 export function usePlaneSelection({
   mapRef,
   airportsRef,
+  displayedPositionsRef,
   onSelect,
 }: UsePlaneSelectionArgs) {
   const [selected, setSelected] = useState<StateVector | null>(null);
@@ -124,11 +126,12 @@ export function usePlaneSelection({
     setReplayT(0);
     setHistory(null);
 
+    const displayed = displayedPositionsRef.current.get(p.icao24);
+    const current: [number, number] = displayed ?? [p.longitude, p.latitude];
+
     const origin = p.origin_iata ? airportsRef.current[p.origin_iata] : undefined;
-    basePathRef.current = origin
-      ? greatCircle(origin, [p.longitude, p.latitude])
-      : [];
-    drawTrajectory(p.origin_iata, [p.longitude, p.latitude]);
+    basePathRef.current = origin ? greatCircle(origin, current) : [];
+    drawTrajectory(p.origin_iata, current);
     setTrajectoryLoading(true);
 
     // Origin / destination airport pins (whichever resolve in the lookup).
@@ -166,7 +169,7 @@ export function usePlaneSelection({
         element: wrap,
         anchor: "center",
       })
-        .setLngLat([p.longitude, p.latitude])
+        .setLngLat(current)
         .addTo(map);
     }
 
@@ -186,7 +189,7 @@ export function usePlaneSelection({
               type: "Feature",
               geometry: {
                 type: "LineString",
-                coordinates: greatCircle([p.longitude, p.latitude], destCoord),
+                coordinates: greatCircle(current, destCoord),
               },
               properties: {},
             },
@@ -198,7 +201,7 @@ export function usePlaneSelection({
     }
 
     map?.flyTo({
-      center: [p.longitude, p.latitude],
+      center: current,
       zoom: Math.max(map.getZoom(), 7),
     });
 
