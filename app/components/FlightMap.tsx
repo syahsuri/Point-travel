@@ -545,7 +545,7 @@ export default function FlightMap() {
         <MapAttribution />
       </div>
 
-      <NavDrawer open={navOpen} onOpenChange={setNavOpen} hidden={listOpen} />
+      <NavDrawer open={navOpen} onOpenChange={setNavOpen} hidden={listOpen && !isDesktop} />
     </div>
   );
 }
