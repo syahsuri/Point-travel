@@ -29,6 +29,7 @@ import AltitudeLegend from "@/components/flight-map/AltitudeLegend";
 import AirportDetailSidebar from "@/components/flight-map/AirportDetailSidebar";
 import MapAttribution from "@/components/flight-map/MapAttribution";
 import LoadingScreen from "@/components/flight-map/LoadingScreen";
+import NavDrawer from "@/components/flight-map/NavDrawer";
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -396,6 +397,7 @@ export default function FlightMap() {
 
   return (
     <div
+      id="app-shell"
       className="relative h-screen w-screen"
       style={{ position: "relative", height: "100dvh", width: "100vw" }}
     >
@@ -406,6 +408,8 @@ export default function FlightMap() {
       />
       
       <LoadingScreen visible={!mapReady} />
+
+      <NavDrawer />
 
       <ChaosOverlay active={chaosMode} />
       {SHOW_CONFLICT_BADGE && <ConflictBadge conflictCount={conflictCount} />}

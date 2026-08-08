@@ -93,7 +93,7 @@ export default function SidePanel({
         <button
           type="button"
           onClick={onToggleListOpen}
-          className={`md:hidden absolute right-2 top-2 z-20 flex h-9 items-center overflow-hidden rounded-lg border border-white/10 bg-black/65 text-xs font-medium text-white/90 backdrop-blur-md shadow-lg hover:bg-white/10 active:scale-95 transition-all duration-300 ease-out ${
+          className={`md:hidden absolute right-2 top-14 z-20 flex h-9 items-center overflow-hidden rounded-lg border border-white/10 bg-black/65 text-xs font-medium text-white/90 backdrop-blur-md shadow-lg hover:bg-white/10 active:scale-95 transition-all duration-300 ease-out ${
             compact ? "w-9 justify-center px-0 gap-0" : "w-auto gap-1.5 px-3"
           }`}
         >
@@ -288,7 +288,7 @@ export default function SidePanel({
       )}
 
       {/* ---------------- DESKTOP PANEL (>= md) ---------------- */}
-      <div className="hidden md:flex absolute right-4 top-4 z-20 flex-col overflow-hidden rounded-md border border-white/10 bg-black/55 text-xs backdrop-blur shadow-lg transition-all w-80 max-h-[calc(100dvh-8rem)]">
+      <div className="hidden md:flex absolute right-4 top-16 z-20 flex-col overflow-hidden rounded-md border border-white/10 bg-black/55 text-xs backdrop-blur shadow-lg transition-all w-80 max-h-[calc(100dvh-8rem)]">
         <div className="flex items-stretch">
           <button
             type="button"
