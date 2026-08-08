@@ -12,6 +12,7 @@ type BasemapSwitcherProps = {
   onToggleAirports: () => void;
   showAltitudeColors: boolean;
   onToggleAltitudeColors: () => void;
+  onOpenChange?: (open: boolean) => void;
   onOpen?: () => void;
 };
 
@@ -36,6 +37,7 @@ export default function BasemapSwitcher({
   onToggleAirports,
   showAltitudeColors,
   onToggleAltitudeColors,
+  onOpenChange,
   onOpen,
 }: BasemapSwitcherProps) {
   const [open, setOpen] = useState(false);
@@ -44,30 +46,33 @@ export default function BasemapSwitcher({
   function toggleOpen() {
     const next = !open;
     if (next) onOpen?.();
+    onOpenChange?.(next);
     setOpen(next);
   }
 
-  // Close on outside click.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
       if (!containerRef.current?.contains(e.target as Node)) {
         setOpen(false);
+        onOpenChange?.(false);
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
+  }, [open, onOpenChange]);
 
-  // Close on Escape.
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        onOpenChange?.(false);
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [open, onOpenChange]);
 
   return (
     <div
@@ -81,11 +86,10 @@ export default function BasemapSwitcher({
         aria-expanded={open}
         aria-label="Map settings"
         title="Map settings"
-        className={`flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg border backdrop-blur shadow-lg text-base md:text-lg transition-colors ${
-          open
+        className={`flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg border backdrop-blur shadow-lg text-base md:text-lg transition-colors ${open
             ? "border-sky-400/40 bg-sky-500/20 text-white"
             : "border-white/10 bg-black/60 text-white/80 hover:bg-white/10"
-        }`}
+          }`}
       >
         ⚙️
       </button>
@@ -103,11 +107,10 @@ export default function BasemapSwitcher({
                 key={m.id}
                 type="button"
                 onClick={() => onSelectBasemap(m.id)}
-                className={`flex items-center justify-between rounded px-2.5 py-1.5 text-left transition-colors ${
-                  basemap === m.id
+                className={`flex items-center justify-between rounded px-2.5 py-1.5 text-left transition-colors ${basemap === m.id
                     ? "bg-white/90 text-black"
                     : "text-white/80 hover:bg-white/10"
-                }`}
+                  }`}
               >
                 <span>{m.label}</span>
                 {basemap === m.id && <span className="text-[11px]">✓</span>}
@@ -133,14 +136,12 @@ export default function BasemapSwitcher({
                 <span>Planes</span>
               </span>
               <span
-                className={`h-4 w-7 shrink-0 rounded-full transition-colors relative ${
-                  showPlanes ? "bg-sky-500" : "bg-white/15"
-                }`}
+                className={`h-4 w-7 shrink-0 rounded-full transition-colors relative ${showPlanes ? "bg-sky-500" : "bg-white/15"
+                  }`}
               >
                 <span
-                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
-                    showPlanes ? "translate-x-3.5" : "translate-x-0.5"
-                  }`}
+                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${showPlanes ? "translate-x-3.5" : "translate-x-0.5"
+                    }`}
                 />
               </span>
             </button>
@@ -156,14 +157,12 @@ export default function BasemapSwitcher({
                 <span>Airports</span>
               </span>
               <span
-                className={`h-4 w-7 shrink-0 rounded-full transition-colors relative ${
-                  showAirports ? "bg-sky-500" : "bg-white/15"
-                }`}
+                className={`h-4 w-7 shrink-0 rounded-full transition-colors relative ${showAirports ? "bg-sky-500" : "bg-white/15"
+                  }`}
               >
                 <span
-                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
-                    showAirports ? "translate-x-3.5" : "translate-x-0.5"
-                  }`}
+                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${showAirports ? "translate-x-3.5" : "translate-x-0.5"
+                    }`}
                 />
               </span>
             </button>
@@ -179,14 +178,12 @@ export default function BasemapSwitcher({
                 <span>Altitude colors</span>
               </span>
               <span
-                className={`h-4 w-7 shrink-0 rounded-full transition-colors relative ${
-                  showAltitudeColors ? "bg-sky-500" : "bg-white/15"
-                }`}
+                className={`h-4 w-7 shrink-0 rounded-full transition-colors relative ${showAltitudeColors ? "bg-sky-500" : "bg-white/15"
+                  }`}
               >
                 <span
-                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
-                    showAltitudeColors ? "translate-x-3.5" : "translate-x-0.5"
-                  }`}
+                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${showAltitudeColors ? "translate-x-3.5" : "translate-x-0.5"
+                    }`}
                 />
               </span>
             </button>

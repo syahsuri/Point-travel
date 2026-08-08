@@ -6,6 +6,7 @@ type AltitudeLegendProps = {
   visible: boolean;
   /** The currently selected plane's barometric altitude in meters, or null. */
   selectedAltitude?: number | null;
+  mapInteracting?: boolean;
 };
 
 /**
@@ -19,6 +20,7 @@ type AltitudeLegendProps = {
 export default function AltitudeLegend({
   visible,
   selectedAltitude,
+  mapInteracting = false,
 }: AltitudeLegendProps) {
   if (!visible) return null;
 
@@ -43,7 +45,10 @@ export default function AltitudeLegend({
   return (
     <>
       {/* ---------------- MOBILE VERTICAL LEGEND (< md) ---------------- */}
-      <div className="md:hidden pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex flex-col items-center gap-1 rounded-full border border-white/15 bg-black/70 px-2 py-3 backdrop-blur-md shadow-xl">
+      <div
+        className={`md:hidden pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex flex-col items-center gap-1 rounded-full border border-white/15 bg-black/70 px-2 py-3 backdrop-blur-md shadow-xl transition-all duration-300 ease-out ${mapInteracting ? "-translate-x-12 opacity-0" : "translate-x-0 opacity-100"
+          }`}
+      >
         {/* Top bound */}
         <span className="text-[7px] font-semibold text-white/50 leading-none">
           {maxAlt / 1000}k

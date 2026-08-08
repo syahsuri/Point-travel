@@ -84,7 +84,7 @@ export default function FlightMap() {
   const [chaosMode, setChaosMode] = useState(false);
   const [travelBadgeExpanded, setTravelBadgeExpanded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-
+  const [settingsOpen, setSettingsOpen] = useState(false);
   function resetMapView() {
     const map = mapRef.current;
     if (!map) return;
@@ -101,6 +101,7 @@ export default function FlightMap() {
   }, [mapReady]);
 
   const [isDesktop, setIsDesktop] = useState(false);
+
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const update = () => setIsDesktop(mq.matches);
@@ -108,6 +109,24 @@ export default function FlightMap() {
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
+
+  const [mapInteracting, setMapInteracting] = useState(false);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    const onMoveStart = () => setMapInteracting(true);
+    const onMoveEnd = () => setMapInteracting(false);
+
+    map.on("movestart", onMoveStart);
+    map.on("moveend", onMoveEnd);
+
+    return () => {
+      map.off("movestart", onMoveStart);
+      map.off("moveend", onMoveEnd);
+    };
+  }, [mapReady]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -415,6 +434,8 @@ export default function FlightMap() {
       : airportList
   ).filter((a) => !a.name.startsWith("[Duplicate]"));
 
+
+
   return (
     <div
       id="app-shell"
@@ -453,6 +474,7 @@ export default function FlightMap() {
           onToggleAirports={toggleAirports}
           showAltitudeColors={showAltitudeColors}
           onToggleAltitudeColors={toggleAltitudeColors}
+          onOpenChange={setSettingsOpen}
           onOpen={() => {
             deselectPlane();
             deselectAirport();
@@ -462,6 +484,7 @@ export default function FlightMap() {
         <AltitudeLegend
           visible={showAltitudeColors}
           selectedAltitude={selected?.baro_altitude}
+          mapInteracting={mapInteracting || settingsOpen}
         />
 
         <SidePanel
