@@ -9,7 +9,7 @@ import { usePlaneSelection } from "@/lib/hooks/usePlaneSelection";
 import { useNearMissRadar } from "@/lib/hooks/useNearMissRadar";
 import { useChaosModeVisuals } from "@/lib/hooks/useChaosModeVisuals";
 import { haversineMeters } from "@/lib/geo";
-import { timeAgo, fmtSched, statusTextClass } from "@/lib/format";
+import { timeAgo, fmtSched, statusTextClass, aircraftCategoryLabel } from "@/lib/format";
 import { type Basemap, INDONESIA_BOUNDS } from "@/lib/mapConstants";
 import { setBasemap } from "@/lib/mapStyle";
 import { useFlightMapEngine } from "@/lib/hooks/useFlightMapEngine";
@@ -358,6 +358,7 @@ export default function FlightMap() {
     ? [
       ["Aircraft", selected.model],
       ["Type", selected.typecode],
+      ["Category", aircraftCategoryLabel(selected.category)],
       ["Maker", selected.manufacturername],
       ["Registration", selected.registration],
       ["Airline/Owner", selected.owner ?? selected.operator_callsign],
@@ -406,7 +407,7 @@ export default function FlightMap() {
         className="absolute inset-0"
         style={{ position: "absolute", inset: 0 }}
       />
-      
+
       <LoadingScreen visible={!mapReady} />
 
       <NavDrawer />

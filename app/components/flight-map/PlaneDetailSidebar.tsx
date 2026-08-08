@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { StateVector, TripHistory } from "@/lib/types";
 import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
+import { aircraftCategoryVisual } from "@/lib/format";
 
 type PlaneDetailSidebarProps = {
   selected: StateVector;
@@ -59,6 +60,7 @@ export default function PlaneDetailSidebar({
       isMinimized: typeof value === "function" ? value(s.isMinimized) : value,
     }));
 
+  const categoryVisual = aircraftCategoryVisual(selected.category);
   const aircraftPhoto = (
     <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-white/5 shrink-0">
       <div className="relative aspect-video w-full overflow-hidden rounded border border-white/10 bg-black/40">
@@ -117,7 +119,18 @@ export default function PlaneDetailSidebar({
         .map(([label, value]) => (
           <div key={label} className="flex justify-between gap-3 px-3 py-1.5">
             <dt className="shrink-0 text-white/45">{label}</dt>
-            <dd className="truncate text-right text-white/90">{value}</dd>
+            {label === "Category" && categoryVisual ? (
+              <dd className="flex justify-end">
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${categoryVisual.className}`}
+                >
+                  <span>{categoryVisual.icon}</span>
+                  {categoryVisual.label}
+                </span>
+              </dd>
+            ) : (
+              <dd className="truncate text-right text-white/90">{value}</dd>
+            )}
           </div>
         ))}
     </dl>
@@ -128,18 +141,26 @@ export default function PlaneDetailSidebar({
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <span
-            className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-              selected.on_ground ? "bg-white/40" : "bg-emerald-400"
-            }`}
+            className={`inline-block h-2 w-2 shrink-0 rounded-full ${selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+              }`}
           />
           <span className="truncate text-sm font-semibold text-white">
             {(selected.callsign ?? "").trim() || selected.icao24}
           </span>
         </div>
         {(selected.origin_iata || selected.destination_iata) && (
-          <div className="mt-0.5 text-white/60">
-            {selected.origin_iata ?? "???"} →{" "}
-            {selected.destination_iata ?? "???"}
+          <div className="mt-0.5 flex items-center gap-1.5 text-white/60">
+            <span>
+              {selected.origin_iata ?? "???"} → {selected.destination_iata ?? "???"}
+            </span>
+            {categoryVisual && (
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${categoryVisual.className}`}
+              >
+                <span>{categoryVisual.icon}</span>
+                {categoryVisual.label}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -148,11 +169,10 @@ export default function PlaneDetailSidebar({
           type="button"
           onClick={onToggleFollow}
           aria-pressed={follow}
-          className={`rounded px-2 py-1 text-[11px] font-medium ${
-            follow
-              ? "bg-sky-500 text-white"
-              : "bg-white/10 text-white/70 hover:bg-white/20"
-          }`}
+          className={`rounded px-2 py-1 text-[11px] font-medium ${follow
+            ? "bg-sky-500 text-white"
+            : "bg-white/10 text-white/70 hover:bg-white/20"
+            }`}
         >
           Follow
         </button>
@@ -284,9 +304,8 @@ export default function PlaneDetailSidebar({
               onClick={() => setIsMinimized(false)}
             >
               <span
-                className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                  selected.on_ground ? "bg-white/40" : "bg-emerald-400"
-                }`}
+                className={`inline-block h-2 w-2 shrink-0 rounded-full ${selected.on_ground ? "bg-white/40" : "bg-emerald-400"
+                  }`}
               />
               <span className="font-bold text-white truncate text-sm">
                 {(selected.callsign ?? "").trim() || selected.icao24}
@@ -295,6 +314,14 @@ export default function PlaneDetailSidebar({
                 <span className="text-white/60 text-xs shrink-0">
                   {selected.origin_iata ?? "???"} →{" "}
                   {selected.destination_iata ?? "???"}
+                </span>
+              )}
+              {categoryVisual && (
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${categoryVisual.className}`}
+                >
+                  <span>{categoryVisual.icon}</span>
+                  {categoryVisual.label}
                 </span>
               )}
             </div>
@@ -332,9 +359,8 @@ export default function PlaneDetailSidebar({
               >
                 <span>Aircraft</span>
                 <span
-                  className={`text-white/50 transition-transform ${
-                    aircraftOpen ? "rotate-180" : ""
-                  }`}
+                  className={`text-white/50 transition-transform ${aircraftOpen ? "rotate-180" : ""
+                    }`}
                 >
                   ▾
                 </span>
@@ -366,16 +392,14 @@ export default function PlaneDetailSidebar({
           onClick={() => setAircraftOpen((v) => !v)}
           aria-expanded={aircraftOpen}
           aria-label="Toggle aircraft details"
-          className={`flex w-5 shrink-0 items-center justify-center border-l border-white/10 transition-colors ${
-            aircraftOpen
-              ? "bg-white/5 text-white/50 hover:bg-white/10"
-              : "bg-sky-500/80 text-white hover:bg-sky-500"
-          }`}
+          className={`flex w-5 shrink-0 items-center justify-center border-l border-white/10 transition-colors ${aircraftOpen
+            ? "bg-white/5 text-white/50 hover:bg-white/10"
+            : "bg-sky-500/80 text-white hover:bg-sky-500"
+            }`}
         >
           <span
-            className={`text-sm transition-transform ${
-              aircraftOpen ? "" : "rotate-180"
-            }`}
+            className={`text-sm transition-transform ${aircraftOpen ? "" : "rotate-180"
+              }`}
           >
             ‹
           </span>

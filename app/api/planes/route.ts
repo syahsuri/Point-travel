@@ -44,6 +44,7 @@ function toStateVector(r: RawState): StateVector | null {
     velocity: num(r.velocity),
     signal_age: num(r.signal_age),
     true_track: num(r.true_track),
+    category: num(r.category),
     // Enriched backend fields.
     trip_id: str(r.trip_id),
     icao_prefix: str(r.icao_prefix),
@@ -75,8 +76,8 @@ export async function GET() {
     const list: RawState[] = Array.isArray(raw)
       ? raw
       : Array.isArray((raw as { states?: unknown }).states)
-      ? (raw as { states: RawState[] }).states
-      : [];
+        ? (raw as { states: RawState[] }).states
+        : [];
 
     const parsed = list
       .map(toStateVector)
@@ -114,8 +115,8 @@ export async function GET() {
         typeof r.last_time_position === "string"
           ? reportSecs(r.last_time_position)
           : typeof r.last_contact === "number"
-          ? r.last_contact
-          : 0;
+            ? r.last_contact
+            : 0;
       return Math.max(max, t);
     }, Math.floor(Date.now() / 1000));
 

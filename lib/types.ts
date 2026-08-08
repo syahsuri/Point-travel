@@ -33,7 +33,7 @@ export interface StateVector {
 
   signal_age: number | null;
   // --- Enriched fields from the gukgukcraft backend (all optional; may be
-  // null when the backend can't resolve them). Not part of raw OpenSky. ---
+  category: number | null;
 
   /** Stable per-leg id, e.g. "71c210_KAL437_2026-07-08_1783445036". */
   trip_id: string | null;
@@ -104,6 +104,7 @@ export interface TripHistory {
   trip_id: string;
   icao24: string;
   callsign: string | null;
+  category: number | null;
   /** ISO-8601 first position time. */
   trip_start_time: string | null;
   /** ISO-8601 last position time. */
