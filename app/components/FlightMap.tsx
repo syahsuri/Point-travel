@@ -29,7 +29,7 @@ import AltitudeLegend from "@/components/flight-map/AltitudeLegend";
 import AirportDetailSidebar from "@/components/flight-map/AirportDetailSidebar";
 import MapAttribution from "@/components/flight-map/MapAttribution";
 import LoadingScreen from "@/components/flight-map/LoadingScreen";
-import NavDrawer from "@/components/flight-map/NavDrawer";
+import NavDrawer, { NAV_DRAWER_WIDTH } from "@/components/flight-map/NavDrawer";
 /**
  * Full-screen FlightRadar24-style map with a basemap switcher.
  *
@@ -46,6 +46,7 @@ import NavDrawer from "@/components/flight-map/NavDrawer";
  */
 
 export default function FlightMap() {
+  const [navOpen, setNavOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   // IATA -> [lon, lat], loaded once from /data/airports.json. Origin of a
@@ -89,6 +90,24 @@ export default function FlightMap() {
     if (!map) return;
     map.fitBounds(INDONESIA_BOUNDS, { padding: 20 });
   }
+
+  useEffect(() => {
+    const el = containerRef.current;
+    const map = mapRef.current;
+    if (!el || !map || !mapReady) return;
+    const ro = new ResizeObserver(() => map.resize());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mapReady]);
+
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -399,106 +418,111 @@ export default function FlightMap() {
   return (
     <div
       id="app-shell"
-      className="relative h-screen w-screen"
+      className="relative h-screen w-screen overflow-hidden"
       style={{ position: "relative", height: "100dvh", width: "100vw" }}
     >
       <div
-        ref={containerRef}
-        className="absolute inset-0"
-        style={{ position: "absolute", inset: 0 }}
-      />
-
-      <LoadingScreen visible={!mapReady} />
-
-      <NavDrawer />
-
-      <ChaosOverlay active={chaosMode} />
-      {SHOW_CONFLICT_BADGE && <ConflictBadge conflictCount={conflictCount} />}
-      <ClockBadge nowWib={nowWib} pushedAway={travelBadgeExpanded} />
-
-      <TravelBadge
-        onReset={resetMapView}
-        onExpandedChange={setTravelBadgeExpanded}
-      />
-
-      <BasemapSwitcher
-        basemap={basemap}
-        onSelectBasemap={selectBasemap}
-        showPlanes={showPlanes}
-        onTogglePlanes={togglePlanes}
-        showAirports={showAirports}
-        onToggleAirports={toggleAirports}
-        showAltitudeColors={showAltitudeColors}
-        onToggleAltitudeColors={toggleAltitudeColors}
-        onOpen={() => {
-          deselectPlane();
-          deselectAirport();
+        className="absolute inset-y-0 left-0 transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        style={{
+          width: navOpen && isDesktop ? `calc(100% - ${NAV_DRAWER_WIDTH}px)` : "100%",
         }}
-      />
-
-      <AltitudeLegend
-        visible={showAltitudeColors}
-        selectedAltitude={selected?.baro_altitude}
-      />
-
-      <SidePanel
-        panelTab={panelTab}
-        onPanelTabChange={setPanelTab}
-        listOpen={listOpen}
-        onToggleListOpen={() => setListOpen((v) => !v)}
-        compact={travelBadgeExpanded}
-        planeList={planeList}
-        filteredPlanes={filteredPlanes}
-        query={query}
-        onQueryChange={setQuery}
-        sortDesc={sortDesc}
-        onToggleSortDesc={() => setSortDesc((v) => !v)}
-        selectedIcao24={selected?.icao24}
-        onSelectPlane={selectPlane}
-        airportList={airportList}
-        filteredAirports={filteredAirports}
-        airportQuery={airportQuery}
-        onAirportQueryChange={setAirportQuery}
-        selectedAirport={selectedAirport}
-        onSelectAirport={selectAirportFromList}
-      />
-
-      {/* Detail sidebar for the selected plane. */}
-      {selected && (
-        <PlaneDetailSidebar
-          selected={selected}
-          history={history}
-          follow={follow}
-          onToggleFollow={toggleFollow}
-          onClose={deselectPlane}
-          flightDetailRows={flightDetailRows}
-          aircraftDetailRows={aircraftDetailRows}
-          progress={progress}
-          eta={eta}
-          replayT={replayT}
-          onReplayTChange={setReplayT}
-          replaying={replaying}
-          onReplayingChange={setReplaying}
-          timeAgoText={timeAgo}
-          fmtSchedText={fmtSched}
+      >
+        <div
+          ref={containerRef}
+          className="absolute inset-0"
+          style={{ position: "absolute", inset: 0 }}
         />
-      )}
 
-      {/* Detail sidebar for the selected airport. */}
-      {selectedAirport && (
-        <AirportDetailSidebar
-          airport={selectedAirport}
-          onClose={deselectAirport}
-          airportBoardTab={airportBoardTab}
-          onAirportBoardTabChange={setAirportBoardTab}
-          schedule={schedule}
-          scheduleLoading={scheduleLoading}
-          fmtSchedText={fmtSched}
-          statusTextClassFn={statusTextClass}
+        <LoadingScreen visible={!mapReady} />
+
+        <ChaosOverlay active={chaosMode} />
+        {SHOW_CONFLICT_BADGE && <ConflictBadge conflictCount={conflictCount} />}
+        <ClockBadge nowWib={nowWib} pushedAway={travelBadgeExpanded} />
+
+        <TravelBadge
+          onReset={resetMapView}
+          onExpandedChange={setTravelBadgeExpanded}
         />
-      )}
-      <AttributionFooter />
-      <MapAttribution />
+
+        <BasemapSwitcher
+          basemap={basemap}
+          onSelectBasemap={selectBasemap}
+          showPlanes={showPlanes}
+          onTogglePlanes={togglePlanes}
+          showAirports={showAirports}
+          onToggleAirports={toggleAirports}
+          showAltitudeColors={showAltitudeColors}
+          onToggleAltitudeColors={toggleAltitudeColors}
+          onOpen={() => {
+            deselectPlane();
+            deselectAirport();
+          }}
+        />
+
+        <AltitudeLegend
+          visible={showAltitudeColors}
+          selectedAltitude={selected?.baro_altitude}
+        />
+
+        <SidePanel
+          panelTab={panelTab}
+          onPanelTabChange={setPanelTab}
+          listOpen={listOpen}
+          onToggleListOpen={() => setListOpen((v) => !v)}
+          compact={travelBadgeExpanded}
+          planeList={planeList}
+          filteredPlanes={filteredPlanes}
+          query={query}
+          onQueryChange={setQuery}
+          sortDesc={sortDesc}
+          onToggleSortDesc={() => setSortDesc((v) => !v)}
+          selectedIcao24={selected?.icao24}
+          onSelectPlane={selectPlane}
+          airportList={airportList}
+          filteredAirports={filteredAirports}
+          airportQuery={airportQuery}
+          onAirportQueryChange={setAirportQuery}
+          selectedAirport={selectedAirport}
+          onSelectAirport={selectAirportFromList}
+        />
+
+        {selected && (
+          <PlaneDetailSidebar
+            selected={selected}
+            history={history}
+            follow={follow}
+            onToggleFollow={toggleFollow}
+            onClose={deselectPlane}
+            flightDetailRows={flightDetailRows}
+            aircraftDetailRows={aircraftDetailRows}
+            progress={progress}
+            eta={eta}
+            replayT={replayT}
+            onReplayTChange={setReplayT}
+            replaying={replaying}
+            onReplayingChange={setReplaying}
+            timeAgoText={timeAgo}
+            fmtSchedText={fmtSched}
+          />
+        )}
+
+        {selectedAirport && (
+          <AirportDetailSidebar
+            airport={selectedAirport}
+            onClose={deselectAirport}
+            airportBoardTab={airportBoardTab}
+            onAirportBoardTabChange={setAirportBoardTab}
+            schedule={schedule}
+            scheduleLoading={scheduleLoading}
+            fmtSchedText={fmtSched}
+            statusTextClassFn={statusTextClass}
+          />
+        )}
+        <AttributionFooter />
+        <MapAttribution />
+      </div>
+
+      <NavDrawer open={navOpen} onOpenChange={setNavOpen} hidden={listOpen} />
     </div>
   );
 }

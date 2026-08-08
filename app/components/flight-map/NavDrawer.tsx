@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
+export const NAV_DRAWER_WIDTH = 224;
+
 const NAV_LINKS = [
   {
     href: "/",
     label: "Home",
     icon: (
       <svg
-        className="w-5 h-5"
+        className="w-4 h-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -27,7 +29,7 @@ const NAV_LINKS = [
     label: "About Us",
     icon: (
       <svg
-        className="w-5 h-5"
+        className="w-4 h-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -45,7 +47,7 @@ const NAV_LINKS = [
     label: "Article",
     icon: (
       <svg
-        className="w-5 h-5"
+        className="w-4 h-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -60,35 +62,37 @@ const NAV_LINKS = [
   },
 ];
 
+type NavDrawerProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  hidden?: boolean;
+};
 /**
  * Hamburger button + slide-in overlay drawer from the right.
  * The map stays still; the drawer overlays on top with a dark backdrop.
  */
-export default function NavDrawer() {
-  const [open, setOpen] = useState(false);
+export default function NavDrawer({ open, onOpenChange, hidden = false }: NavDrawerProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
       if (!drawerRef.current?.contains(e.target as Node)) {
-        setOpen(false);
+        onOpenChange(false);
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
+  }, [open, onOpenChange]);
 
-  // Close on Escape.
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") onOpenChange(false);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [open, onOpenChange]);
 
   return (
     <>
@@ -96,57 +100,42 @@ export default function NavDrawer() {
       <button
         type="button"
         id="nav-drawer-toggle"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-label="Open navigation menu"
         title="Navigation"
-        className={`absolute right-2 top-2 md:right-4 md:top-4 z-20 flex h-9 w-9 md:h-10 md:w-10 flex-col items-center justify-center gap-[5px] rounded-lg border backdrop-blur shadow-lg transition-colors select-none ${
-          open
-            ? "border-sky-400/40 bg-sky-500/20 text-white"
-            : "border-white/10 bg-black/60 text-white/80 hover:bg-white/10"
-        }`}
+        className={`fixed right-2 top-2 md:right-4 md:top-4 z-40 flex h-9 w-9 md:h-10 md:w-10 flex-col items-center justify-center gap-[5px] rounded-lg border backdrop-blur shadow-lg transition-all select-none ${open || hidden ? "opacity-0 pointer-events-none scale-90" : "border-white/10 bg-black/60 text-white/80 hover:bg-white/10"
+          }`}
       >
         <span
-          className={`block h-[2px] w-5 rounded-full bg-current transition-transform duration-300 origin-center ${
-            open ? "translate-y-[7px] rotate-45" : ""
-          }`}
+          className={`block h-[2px] w-5 rounded-full bg-current transition-transform duration-300 origin-center ${open ? "translate-y-[7px] rotate-45" : ""
+            }`}
         />
         <span
-          className={`block h-[2px] w-5 rounded-full bg-current transition-opacity duration-200 ${
-            open ? "opacity-0" : "opacity-100"
-          }`}
+          className={`block h-[2px] w-5 rounded-full bg-current transition-opacity duration-200 ${open ? "opacity-0" : "opacity-100"
+            }`}
         />
         <span
-          className={`block h-[2px] w-5 rounded-full bg-current transition-transform duration-300 origin-center ${
-            open ? "-translate-y-[7px] -rotate-45" : ""
-          }`}
+          className={`block h-[2px] w-5 rounded-full bg-current transition-transform duration-300 origin-center ${open ? "-translate-y-[7px] -rotate-45" : ""
+            }`}
         />
       </button>
 
-      {/* ── Backdrop ── */}
-      <div
-        onClick={() => setOpen(false)}
-        className={`fixed inset-0 z-20 bg-black/50 transition-opacity duration-300 ${
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
-        aria-hidden="true"
-      />
-
-      {/* ── Offcanvas drawer — slides in from the right, overlays the map ── */}
+      {/* ── Sidebar — fixed to the right edge, slides in, pushes nothing
+           itself (the parent's content wrapper shrinks to make room) ── */}
       <div
         ref={drawerRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal="false"
         aria-label="Navigation menu"
-        className={`fixed right-0 top-0 z-30 flex w-56 h-auto flex-col bg-[#0b1622] border-l border-b border-white/10 shadow-2xl rounded-bl-xl transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed right-0 top-0 z-30 flex h-full w-full md:w-56 flex-col bg-[#0b1622] border-l border-white/10 shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${open ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-blue-700 shadow-lg shadow-sky-500/30">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-blue-700 shadow-lg shadow-sky-500/30">
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-white" fill="currentColor">
                 <path d="M21 16v-2l-8-5V3.5A1.5 1.5 0 0 0 11.5 2a1.5 1.5 0 0 0-1.5 1.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5L21 16Z" />
               </svg>
             </div>
@@ -157,7 +146,7 @@ export default function NavDrawer() {
           </div>
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() => onOpenChange(false)}
             aria-label="Close navigation menu"
             className="flex h-7 w-7 items-center justify-center rounded-md text-white/50 hover:bg-white/10 hover:text-white transition-colors"
           >
@@ -176,7 +165,7 @@ export default function NavDrawer() {
             <Link
               key={link.href}
               href={link.href}
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/75 transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-[0.98]"
             >
               <span className="text-white/50 group-hover:text-sky-400 transition-colors">
@@ -187,8 +176,8 @@ export default function NavDrawer() {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="px-4 py-3 border-t border-white/10">
+        {/* Footer — pinned to the bottom now that it's full height */}
+        <div className="mt-auto px-4 py-3 border-t border-white/10">
           <p className="text-[11px] text-white/25 text-center">
             © {new Date().getFullYear()} Point Travel
           </p>

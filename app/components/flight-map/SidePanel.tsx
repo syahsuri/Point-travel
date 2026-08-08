@@ -93,23 +93,17 @@ export default function SidePanel({
         <button
           type="button"
           onClick={onToggleListOpen}
-          className={`md:hidden absolute right-2 top-14 z-20 flex h-9 items-center overflow-hidden rounded-lg border border-white/10 bg-black/65 text-xs font-medium text-white/90 backdrop-blur-md shadow-lg hover:bg-white/10 active:scale-95 transition-all duration-300 ease-out ${
-            compact ? "w-9 justify-center px-0 gap-0" : "w-auto gap-1.5 px-3"
-          }`}
-        >
-          <span className="shrink-0">🔍</span>
-          <span
-            className={`whitespace-nowrap transition-all duration-300 ${
-              compact ? "max-w-0 opacity-0" : "max-w-40 opacity-100"
+          className={`md:hidden absolute right-12 top-2 z-20 flex h-9 items-center gap-1 rounded-lg border border-white/10 bg-black/65 px-2.5 text-[11px] font-medium text-white/90 backdrop-blur-md shadow-lg transition-all duration-300 ease-out hover:bg-white/10 active:scale-95 ${compact
+              ? "translate-x-24 opacity-0 pointer-events-none"
+              : "translate-x-0 opacity-100"
             }`}
-          >
-            {panelTab === "flights"
-              ? `Flights (${planeList.length})`
-              : `Airports (${airportList.length})`}
+        >
+          <span>🔍</span>
+          <span className="whitespace-nowrap">
+            {panelTab === "flights" ? "Flights" : "Airports"}
           </span>
         </button>
       )}
-
       {/* ---------------- MOBILE FULL DRAWER MODAL (< md) when list is open ---------------- */}
       {listOpen && (
         <div className="md:hidden fixed inset-0 z-30 flex flex-col bg-black/85 backdrop-blur-lg p-3 pt-4">
@@ -134,22 +128,20 @@ export default function SidePanel({
             <button
               type="button"
               onClick={() => onPanelTabChange("flights")}
-              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${
-                panelTab === "flights"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${panelTab === "flights"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+                }`}
             >
               Flights ({planeList.length})
             </button>
             <button
               type="button"
               onClick={() => onPanelTabChange("airports")}
-              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${
-                panelTab === "airports"
-                  ? "border-sky-500 text-white bg-white/5"
-                  : "border-transparent text-white/50 hover:text-white/80"
-              }`}
+              className={`flex-1 py-2.5 text-center font-semibold text-xs border-b-2 transition-colors ${panelTab === "airports"
+                ? "border-sky-500 text-white bg-white/5"
+                : "border-transparent text-white/50 hover:text-white/80"
+                }`}
             >
               Airports ({airportList.length})
             </button>
@@ -181,8 +173,8 @@ export default function SidePanel({
                     const alt =
                       typeof p.baro_altitude === "number"
                         ? `${Math.round(
-                            p.baro_altitude * 3.281
-                          ).toLocaleString()} ft`
+                          p.baro_altitude * 3.281
+                        ).toLocaleString()} ft`
                         : "—";
                     const spd =
                       typeof p.velocity === "number"
@@ -190,9 +182,8 @@ export default function SidePanel({
                         : "—";
                     const route =
                       p.origin_iata || p.destination_iata
-                        ? `${p.origin_iata ?? "???"} → ${
-                            p.destination_iata ?? "???"
-                          }`
+                        ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
+                        }`
                         : null;
                     const ago = timeAgo(p.last_time_position);
                     const meta = [p.flight_status, ago]
@@ -203,16 +194,14 @@ export default function SidePanel({
                         <button
                           type="button"
                           onClick={() => handleSelectPlane(p)}
-                          className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${
-                            selectedIcao24 === p.icao24 ? "bg-sky-500/25" : ""
-                          }`}
+                          className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/25" : ""
+                            }`}
                         >
                           <span className="flex w-full items-center justify-between gap-2">
                             <span className="flex items-center gap-2 truncate">
                               <span
-                                className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                                  p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                                }`}
+                                className={`inline-block h-2 w-2 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                                  }`}
                               />
                               <span className="truncate font-semibold text-white text-sm">
                                 {cs}
@@ -250,19 +239,17 @@ export default function SidePanel({
               <ul className="divide-y divide-white/10 overflow-y-auto flex-1 text-xs">
                 {filteredAirports.map((a, i) => (
                   <li
-                    key={`${a.icao_code ?? a.iata_code ?? a.name}-${
-                      a.latitude_deg
-                    }-${a.longitude_deg}-${i}`}
+                    key={`${a.icao_code ?? a.iata_code ?? a.name}-${a.latitude_deg
+                      }-${a.longitude_deg}-${i}`}
                   >
                     <button
                       type="button"
                       onClick={() => handleSelectAirport(a)}
-                      className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${
-                        selectedAirport?.icao_code === a.icao_code &&
+                      className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${selectedAirport?.icao_code === a.icao_code &&
                         selectedAirport?.name === a.name
-                          ? "bg-sky-500/25"
-                          : ""
-                      }`}
+                        ? "bg-sky-500/25"
+                        : ""
+                        }`}
                     >
                       <span className="flex w-full items-center justify-between gap-2">
                         <span className="truncate font-semibold text-white text-sm">
@@ -293,22 +280,20 @@ export default function SidePanel({
           <button
             type="button"
             onClick={() => onPanelTabChange("flights")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
-              panelTab === "flights"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "flights"
+              ? "border-sky-500 text-white bg-white/5"
+              : "border-transparent text-white/50 hover:text-white/80"
+              }`}
           >
             Flights ({planeList.length})
           </button>
           <button
             type="button"
             onClick={() => onPanelTabChange("airports")}
-            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${
-              panelTab === "airports"
-                ? "border-sky-500 text-white bg-white/5"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
+            className={`flex-1 px-3 py-2 text-center font-semibold border-b-2 transition-colors ${panelTab === "airports"
+              ? "border-sky-500 text-white bg-white/5"
+              : "border-transparent text-white/50 hover:text-white/80"
+              }`}
           >
             Airports ({airportList.length})
           </button>
@@ -352,8 +337,8 @@ export default function SidePanel({
                   const alt =
                     typeof p.baro_altitude === "number"
                       ? `${Math.round(
-                          p.baro_altitude * 3.281
-                        ).toLocaleString()} ft`
+                        p.baro_altitude * 3.281
+                      ).toLocaleString()} ft`
                       : "—";
                   const spd =
                     typeof p.velocity === "number"
@@ -361,9 +346,8 @@ export default function SidePanel({
                       : "—";
                   const route =
                     p.origin_iata || p.destination_iata
-                      ? `${p.origin_iata ?? "???"} → ${
-                          p.destination_iata ?? "???"
-                        }`
+                      ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
+                      }`
                       : null;
                   const ago = timeAgo(p.last_time_position);
                   const meta = [p.flight_status, ago]
@@ -374,16 +358,14 @@ export default function SidePanel({
                       <button
                         type="button"
                         onClick={() => handleSelectPlane(p)}
-                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
-                          selectedIcao24 === p.icao24 ? "bg-sky-500/20" : ""
-                        }`}
+                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/20" : ""
+                          }`}
                       >
                         <span className="flex w-full items-center justify-between gap-2">
                           <span className="flex items-center gap-1.5 truncate">
                             <span
-                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                                p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                              }`}
+                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                                }`}
                             />
                             <span className="truncate font-medium text-white/90">
                               {cs}
@@ -421,19 +403,17 @@ export default function SidePanel({
             <ul className="divide-y divide-white/5 overflow-y-auto">
               {filteredAirports.map((a, i) => (
                 <li
-                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${
-                    a.latitude_deg
-                  }-${a.longitude_deg}-${i}`}
+                  key={`${a.icao_code ?? a.iata_code ?? a.name}-${a.latitude_deg
+                    }-${a.longitude_deg}-${i}`}
                 >
                   <button
                     type="button"
                     onClick={() => handleSelectAirport(a)}
-                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${
-                      selectedAirport?.icao_code === a.icao_code &&
+                    className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedAirport?.icao_code === a.icao_code &&
                       selectedAirport?.name === a.name
-                        ? "bg-sky-500/20"
-                        : ""
-                    }`}
+                      ? "bg-sky-500/20"
+                      : ""
+                      }`}
                   >
                     <span className="flex w-full items-center justify-between gap-2">
                       <span className="truncate font-medium text-white/90">
