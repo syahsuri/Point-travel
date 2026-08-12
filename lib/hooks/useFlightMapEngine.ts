@@ -938,10 +938,7 @@ export function useFlightMapEngine({
             if (iconEl) {
               const h = sel.true_track;
               iconEl.style.transform = typeof h === "number" ? `rotate(${h}deg)` : "none";
-              iconEl.style.backgroundColor = altitudeColorForValue(sel.baro_altitude, {
-                onGround: sel.on_ground,
-                flightStatus: sel.flight_status,
-              });
+              iconEl.style.backgroundColor = "#ffffff";
             }
           }
         };

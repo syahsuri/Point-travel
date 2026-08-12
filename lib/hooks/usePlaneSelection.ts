@@ -164,10 +164,7 @@ export function usePlaneSelection({
       wrap.style.cssText = "pointer-events:none;line-height:0";
       const icon = document.createElement("div");
       const iconUrl = categoryIconSrc(p.category);
-      const color = altitudeColorForValue(p.baro_altitude, {
-        onGround: p.on_ground,
-        flightStatus: p.flight_status,
-      });
+      const color = "#ffffff";
       icon.style.cssText = `
     height:${SELECTED_PLANE_ICON_H}px;
     width:${SELECTED_PLANE_ICON_W}px;
