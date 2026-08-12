@@ -10,7 +10,7 @@ import { altitudeColorExpression } from "@/lib/altitudeColor";
 import { readPlanesCache, writePlanesCache } from "@/lib/planesCache";
 import { posSecs } from "@/lib/format";
 import { altitudeColorForValue } from "@/lib/altitudeColor";
-import { categoryIconSrc, ALL_CATEGORY_ICON_CODES } from "@/lib/aircraftIcon";
+import { ALL_CATEGORY_ICON_CODES } from "@/lib/aircraftIcon";
 
 import {
   deadReckon,
