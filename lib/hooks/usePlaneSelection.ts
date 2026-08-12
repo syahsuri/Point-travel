@@ -5,6 +5,8 @@ import type { RefObject } from "react";
 import maplibregl, { type GeoJSONSource } from "maplibre-gl";
 import { loadHistory } from "@/lib/history";
 import { greatCircle, smoothPath, pointAlong } from "@/lib/geo";
+import { categoryIconSrc } from "@/lib/aircraftIcon"
+import { altitudeColorForValue } from "@/lib/altitudeColor";
 import {
   SELECTED_PLANE_ICON_SRC,
   SELECTED_PLANE_ICON_W,
@@ -160,11 +162,27 @@ export function usePlaneSelection({
       }
       const wrap = document.createElement("div");
       wrap.style.cssText = "pointer-events:none;line-height:0";
-      const img = document.createElement("img");
-      img.src = SELECTED_PLANE_ICON_SRC;
-      img.alt = "";
-      img.style.cssText = `height:${SELECTED_PLANE_ICON_H}px;width:${SELECTED_PLANE_ICON_W}px;display:block;`;
-      wrap.appendChild(img);
+      const icon = document.createElement("div");
+      const iconUrl = categoryIconSrc(p.category);
+      const color = altitudeColorForValue(p.baro_altitude, {
+        onGround: p.on_ground,
+        flightStatus: p.flight_status,
+      });
+      icon.style.cssText = `
+    height:${SELECTED_PLANE_ICON_H}px;
+    width:${SELECTED_PLANE_ICON_W}px;
+    display:block;
+    background-color:${color};
+    -webkit-mask-image:url(${iconUrl});
+    mask-image:url(${iconUrl});
+    -webkit-mask-size:contain;
+    mask-size:contain;
+    -webkit-mask-repeat:no-repeat;
+    mask-repeat:no-repeat;
+    -webkit-mask-position:center;
+    mask-position:center;
+  `;
+      wrap.appendChild(icon);
       selectedMarkerRef.current = new maplibregl.Marker({
         element: wrap,
         anchor: "center",

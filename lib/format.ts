@@ -129,3 +129,4 @@ export function aircraftCategoryVisual(
   if (category == null) return null;
   return CATEGORY_VISUALS[category] ?? null;
 }
+

@@ -9,6 +9,8 @@ import { setBasemap, BASE_STYLE } from "@/lib/mapStyle";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
 import { readPlanesCache, writePlanesCache } from "@/lib/planesCache";
 import { posSecs } from "@/lib/format";
+import { altitudeColorForValue } from "@/lib/altitudeColor";
+import { categoryIconSrc, ALL_CATEGORY_ICON_CODES } from "@/lib/aircraftIcon";
 
 import {
   deadReckon,
@@ -99,6 +101,7 @@ function planesToGeoJSON(
         owner: p.owner,
         flight_status: p.flight_status,
         last_time_position: p.last_time_position,
+        category: p.category,
       },
     })),
   };
@@ -109,7 +112,7 @@ export function useFlightMapEngine({
   mapRef,
   airportsRef,
   planesRef,
-  
+
   setAirports,
   setAirportList,
   setPlaneList,
@@ -229,6 +232,14 @@ export function useFlightMapEngine({
           "plane-sdf",
           PLANE_SDF_ICON_H,
           PLANE_SDF_ICON_W
+        ),
+        ...ALL_CATEGORY_ICON_CODES.map((code) =>
+          loadSdfIcon(
+            `/icons/planes-category/${code}.svg`,
+            `plane-cat-${code}`,
+            150, // match your source SVG's viewBox/intrinsic size
+            150
+          )
         ),
       ]);
 
@@ -655,20 +666,42 @@ export function useFlightMapEngine({
           type: "symbol",
           source: "planes",
           layout: {
-            "icon-image": "plane-sdf",
-            "icon-rotate": ["-", ["get", "track"], 45],
+            "icon-image": [
+              "match",
+              ["get", "category"],
+              0, "plane-cat-a0",
+              1, "plane-cat-a0",
+              2, "plane-cat-a1",
+              3, "plane-cat-a2",
+              4, "plane-cat-a3",
+              5, "plane-cat-a4",
+              6, "plane-cat-a5",
+              7, "plane-cat-a6",
+              8, "plane-cat-a7",
+              9, "plane-cat-b1",
+              10, "plane-cat-b2",
+              11, "plane-cat-b3",
+              12, "plane-cat-b4",
+              16, "plane-cat-c0",
+              17, "plane-cat-c0",
+              18, "plane-cat-c0",
+              19, "plane-cat-c0",
+              20, "plane-cat-c0",
+              "plane-cat-a0",
+            ],
+            "icon-rotate": ["get", "track"],
             "icon-size": [
               "interpolate",
               ["linear"],
               ["zoom"],
               4,
-              0.7,
+              0.33,
               7,
-              1.0,
+              0.48,
               10,
-              1.35,
+              0.63,
               13,
-              1.7,
+              0.78,
             ],
             "icon-rotation-alignment": "map",
             "icon-allow-overlap": true,
@@ -840,18 +873,18 @@ export function useFlightMapEngine({
             destSrc.setData(
               destCoord
                 ? {
-                    type: "FeatureCollection",
-                    features: [
-                      {
-                        type: "Feature",
-                        geometry: {
-                          type: "LineString",
-                          coordinates: greatCircle(head, destCoord),
-                        },
-                        properties: {},
+                  type: "FeatureCollection",
+                  features: [
+                    {
+                      type: "Feature",
+                      geometry: {
+                        type: "LineString",
+                        coordinates: greatCircle(head, destCoord),
                       },
-                    ],
-                  }
+                      properties: {},
+                    },
+                  ],
+                }
                 : { type: "FeatureCollection", features: [] }
             );
           }
@@ -860,12 +893,12 @@ export function useFlightMapEngine({
           const ppathRaw = sel.on_ground
             ? []
             : predictPath(
-                sel.longitude,
-                sel.latitude,
-                sel.velocity,
-                sel.true_track,
-                omega
-              );
+              sel.longitude,
+              sel.latitude,
+              sel.velocity,
+              sel.true_track,
+              omega
+            );
           const ppath =
             ppathRaw.length >= 3 ? smoothPath(ppathRaw, 1) : ppathRaw;
           pred?.setData({
@@ -873,12 +906,12 @@ export function useFlightMapEngine({
             features:
               ppath.length >= 2
                 ? [
-                    {
-                      type: "Feature",
-                      geometry: { type: "LineString", coordinates: ppath },
-                      properties: {},
-                    },
-                  ]
+                  {
+                    type: "Feature",
+                    geometry: { type: "LineString", coordinates: ppath },
+                    properties: {},
+                  },
+                ]
                 : [],
           });
           const turning = !sel.on_ground && Math.abs(omega) >= 0.15;
@@ -889,23 +922,26 @@ export function useFlightMapEngine({
             type: "FeatureCollection",
             features: turning
               ? [
-                  {
-                    type: "Feature",
-                    geometry: { type: "Point", coordinates: head },
-                    properties: {},
-                  },
-                ]
+                {
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: head },
+                  properties: {},
+                },
+              ]
               : [],
           });
           const selectedMarker = selectedMarkerRef.current;
           if (selectedMarker) {
             selectedMarker.setLngLat(head);
-            const imgEl = selectedMarker.getElement()
+            const iconEl = selectedMarker.getElement()
               .firstElementChild as HTMLElement | null;
-            if (imgEl) {
+            if (iconEl) {
               const h = sel.true_track;
-              imgEl.style.transform =
-                typeof h === "number" ? `rotate(${h - 45}deg)` : "none";
+              iconEl.style.transform = typeof h === "number" ? `rotate(${h}deg)` : "none";
+              iconEl.style.backgroundColor = altitudeColorForValue(sel.baro_altitude, {
+                onGround: sel.on_ground,
+                flightStatus: sel.flight_status,
+              });
             }
           }
         };

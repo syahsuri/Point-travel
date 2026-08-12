@@ -279,8 +279,29 @@ export default function FlightMap() {
     if (!map || !map.getLayer("planes")) return;
     if (chaosMode) return; // chaos mode owns the layer while active
 
-    // ALWAYS force back to SDF — don't trust getLayoutProperty checks
-    map.setLayoutProperty("planes", "icon-image", "plane-sdf");
+    map.setLayoutProperty("planes", "icon-image", [
+      "match",
+      ["get", "category"],
+      0, "plane-cat-a0",
+      1, "plane-cat-a0",
+      2, "plane-cat-a1",
+      3, "plane-cat-a2",
+      4, "plane-cat-a3",
+      5, "plane-cat-a4",
+      6, "plane-cat-a5",
+      7, "plane-cat-a6",
+      8, "plane-cat-a7",
+      9, "plane-cat-b1",
+      10, "plane-cat-b2",
+      11, "plane-cat-b3",
+      12, "plane-cat-b4",
+      16, "plane-cat-c0",
+      17, "plane-cat-c0",
+      18, "plane-cat-c0",
+      19, "plane-cat-c0",
+      20, "plane-cat-c0",
+      "plane-cat-a0",
+    ]);
 
     map.setPaintProperty(
       "planes",
