@@ -2,7 +2,8 @@
 
 /**
  * Bottom-center attribution credit for the flight data source (OpenSky
- * Network) and site copyright. Static — no props needed.
+ * Network), aircraft icon set (ADS-B Radar), and site copyright. Static —
+ * no props needed.
  */
 export default function AttributionFooter() {
   const year = new Date().getFullYear();
@@ -20,7 +21,17 @@ export default function AttributionFooter() {
           OpenSky Network
         </a>
       </span>
-      <span>© {year} Point-travel. All rights reserved.</span>
+      <span>
+        Aircraft Icons By:{" "}
+
+        <a href="https://adsb-radar.com/help/icons.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pointer-events-auto text-sky-400 underline hover:text-sky-300"
+        >
+          adsb-radar
+        </a>
+      </span>
     </div>
   );
 }
