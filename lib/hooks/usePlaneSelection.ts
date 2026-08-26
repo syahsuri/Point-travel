@@ -6,9 +6,7 @@ import maplibregl, { type GeoJSONSource } from "maplibre-gl";
 import { loadHistory } from "@/lib/history";
 import { greatCircle, smoothPath, pointAlong } from "@/lib/geo";
 import { categoryIconSrc } from "@/lib/aircraftIcon"
-import { altitudeColorForValue } from "@/lib/altitudeColor";
 import {
-  SELECTED_PLANE_ICON_SRC,
   SELECTED_PLANE_ICON_W,
   SELECTED_PLANE_ICON_H,
 } from "@/lib/mapConstants";

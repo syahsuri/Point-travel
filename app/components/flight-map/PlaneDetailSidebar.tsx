@@ -6,6 +6,7 @@ import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
 import { aircraftCategoryVisual } from "@/lib/format";
 import { squawkAlertLevel, squawkLabel } from "@/lib/squawk";
 import { planeTypeBadgeClass, planeTypeShortLabel } from "@/lib/planeType";
+import type { PlaneType } from "@/lib/types";
 
 type PlaneDetailSidebarProps = {
   selected: StateVector;
@@ -133,11 +134,10 @@ export default function PlaneDetailSidebar({
             ) : label === "Flight Type" && value ? (
               <dd className="flex justify-end">
                 <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-                    planeTypeBadgeClass(value as any)
-                      ? planeTypeBadgeClass(value as any)
+                  className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold leading-none ${planeTypeBadgeClass(value as PlaneType | null)
+                      ? planeTypeBadgeClass(value as PlaneType | null)
                       : "bg-white/5 text-white/90 border-white/10"
-                  }`}
+                    }`}
                 >
                   {value}
                 </span>
@@ -301,13 +301,12 @@ export default function PlaneDetailSidebar({
             {label === "Squawk" && value ? (
               <dd className="flex justify-end">
                 <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono font-bold leading-none ${
-                    squawkAlertLevel(value) === "emergency"
+                  className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono font-bold leading-none ${squawkAlertLevel(value) === "emergency"
                       ? "bg-red-600/35 text-red-200 border-red-500/50 animate-pulse"
                       : squawkAlertLevel(value) === "operational"
-                      ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
-                      : "bg-white/5 text-white/90 border-white/10"
-                  }`}
+                        ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
+                        : "bg-white/5 text-white/90 border-white/10"
+                    }`}
                 >
                   {value}
                   {squawkLabel(value) && ` (${squawkLabel(value)})`}
