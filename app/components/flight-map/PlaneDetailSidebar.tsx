@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { StateVector, TripHistory } from "@/lib/types";
 import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
 import { aircraftCategoryVisual } from "@/lib/format";
+import { squawkAlertLevel, squawkLabel } from "@/lib/squawk";
+import { planeTypeBadgeClass, planeTypeShortLabel } from "@/lib/planeType";
 
 type PlaneDetailSidebarProps = {
   selected: StateVector;
@@ -128,6 +130,18 @@ export default function PlaneDetailSidebar({
                   {categoryVisual.label}
                 </span>
               </dd>
+            ) : label === "Flight Type" && value ? (
+              <dd className="flex justify-end">
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold leading-none ${
+                    planeTypeBadgeClass(value as any)
+                      ? planeTypeBadgeClass(value as any)
+                      : "bg-white/5 text-white/90 border-white/10"
+                  }`}
+                >
+                  {value}
+                </span>
+              </dd>
             ) : (
               <dd className="truncate text-right text-white/90">{value}</dd>
             )}
@@ -147,6 +161,13 @@ export default function PlaneDetailSidebar({
           <span className="truncate text-sm font-semibold text-white">
             {(selected.callsign ?? "").trim() || selected.icao24}
           </span>
+          {planeTypeBadgeClass(selected.plane_type) && (
+            <span
+              className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${planeTypeBadgeClass(selected.plane_type)}`}
+            >
+              {planeTypeShortLabel(selected.plane_type)}
+            </span>
+          )}
         </div>
         {(selected.origin_iata || selected.destination_iata) && (
           <div className="mt-0.5 flex items-center gap-1.5 text-white/60">
@@ -277,7 +298,24 @@ export default function PlaneDetailSidebar({
         .map(([label, value]) => (
           <div key={label} className="flex justify-between gap-3 px-3 py-1.5">
             <dt className="shrink-0 text-white/45">{label}</dt>
-            <dd className="truncate text-right text-white/90">{value}</dd>
+            {label === "Squawk" && value ? (
+              <dd className="flex justify-end">
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono font-bold leading-none ${
+                    squawkAlertLevel(value) === "emergency"
+                      ? "bg-red-600/35 text-red-200 border-red-500/50 animate-pulse"
+                      : squawkAlertLevel(value) === "operational"
+                      ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
+                      : "bg-white/5 text-white/90 border-white/10"
+                  }`}
+                >
+                  {value}
+                  {squawkLabel(value) && ` (${squawkLabel(value)})`}
+                </span>
+              </dd>
+            ) : (
+              <dd className="truncate text-right text-white/90">{value}</dd>
+            )}
           </div>
         ))}
     </dl>
@@ -310,6 +348,13 @@ export default function PlaneDetailSidebar({
               <span className="font-bold text-white truncate text-sm">
                 {(selected.callsign ?? "").trim() || selected.icao24}
               </span>
+              {planeTypeBadgeClass(selected.plane_type) && (
+                <span
+                  className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${planeTypeBadgeClass(selected.plane_type)}`}
+                >
+                  {planeTypeShortLabel(selected.plane_type)}
+                </span>
+              )}
               {(selected.origin_iata || selected.destination_iata) && (
                 <span className="text-white/60 text-xs shrink-0">
                   {selected.origin_iata ?? "???"} →{" "}

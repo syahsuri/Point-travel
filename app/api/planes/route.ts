@@ -1,14 +1,6 @@
 import type { StateVector } from "@/lib/types";
 import { fetchRetry } from "@/lib/fetchRetry";
 
-/**
- * Server-side proxy for the flight backend.
- *
- * The backend (https://flights.gukgukcraft.id/flights) sends no CORS header, so
- * the browser can't fetch it directly — this route fetches it server-side and
- * returns a normalized { time, states } envelope the map consumes. Runs at
- * request time (network fetch = dynamic); edge-cached briefly via Cache-Control.
- */
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL =
@@ -16,7 +8,6 @@ const BACKEND_URL =
 
 const AUTH_TOKEN = process.env.FLIGHTS_AUTH_TOKEN ?? "";
 
-// The backend returns a bare array; tolerate a { states } envelope too.
 type RawState = Partial<StateVector> & Record<string, unknown>;
 
 function toStateVector(r: RawState): StateVector | null {
@@ -45,7 +36,8 @@ function toStateVector(r: RawState): StateVector | null {
     signal_age: num(r.signal_age),
     true_track: num(r.true_track),
     category: num(r.category),
-    // Enriched backend fields.
+    plane_type: r.plane_type ?? null,
+    squawk: r.squawk ?? null,
     trip_id: str(r.trip_id),
     icao_prefix: str(r.icao_prefix),
     iata_prefix: str(r.iata_prefix),
@@ -83,9 +75,6 @@ export async function GET() {
       .map(toStateVector)
       .filter((s): s is StateVector => s !== null);
 
-    // Report time in unix seconds from an ISO string. Backend sends naive ISO
-    // (no tz) meaning UTC — append Z so Date.parse doesn't read it as
-    // server-local. Leaves an already-offset string alone. Null/invalid -> 0.
     const reportSecs = (iso: string | null): number => {
       if (!iso) return 0;
       const withTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
@@ -93,9 +82,6 @@ export async function GET() {
       return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
     };
 
-    // The backend can send several trip rows per aircraft in one response.
-    // Collapse to one entry per icao24, keeping the freshest position — this
-    // keeps the client's `key={icao24}` unique and shows one marker per plane.
     const byIcao = new Map<string, StateVector>();
     for (const s of parsed) {
       const prev = byIcao.get(s.icao24);
@@ -108,8 +94,6 @@ export async function GET() {
     }
     const states = [...byIcao.values()];
 
-    // Data age: newest report time across the raw rows. Tolerate the old
-    // numeric `last_contact` too. Falls back to now.
     const time = list.reduce((max, r) => {
       const t =
         typeof r.last_time_position === "string"
@@ -129,7 +113,9 @@ export async function GET() {
     );
   } catch (err) {
     console.error("[/api/planes]", err);
-    // Return empty (200) so the client keeps its last-known planes.
-    return Response.json({ time: Math.floor(Date.now() / 1000), states: [] });
+    const fallbackPayload = Buffer.from(
+      JSON.stringify({ time: Math.floor(Date.now() / 1000), states: [] })
+    ).toString("base64");
+    return Response.json({ data: fallbackPayload });
   }
 }

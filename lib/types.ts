@@ -9,6 +9,8 @@
  * Units follow OpenSky: lon/lat in degrees, altitude in meters, velocity in
  * m/s, true_track in decimal degrees clockwise from north (0 = north).
  */
+export type PlaneType = "Military" | "Interesting" | "LADD" | "Civil";
+
 export interface StateVector {
   /** Unique ICAO 24-bit address of the transponder, hex string. Stable id. */
   icao24: string;
@@ -34,6 +36,9 @@ export interface StateVector {
   signal_age: number | null;
   // --- Enriched fields from the gukgukcraft backend (all optional; may be
   category: number | null;
+
+  plane_type: PlaneType | null;
+  squawk: string | null;
 
   /** Stable per-leg id, e.g. "71c210_KAL437_2026-07-08_1783445036". */
   trip_id: string | null;

@@ -68,7 +68,7 @@ export default function FlightMap() {
   const [showAirports, setShowAirports] = useState(true);
   // Free-text filter for the flights list.
   const [query, setQuery] = useState("");
-  const [sortDesc, setSortDesc] = useState(true);
+
   // Where we predicted the selected plane would be by the next poll, so the next
   // poll can measure the forecast error. Plus the resulting error (km) for the HUD.
   const SHOW_CONFLICT_BADGE = false; // Set to true to re-enable
@@ -373,6 +373,7 @@ export default function FlightMap() {
   const flightDetailRows: [string, string | null][] = selected
     ? [
       ["Status", selected.flight_status],
+      ["Squawk", selected.squawk],
       ["From", selected.origin_iata],
       ["To", selected.destination_iata],
       ["Dep (sched)", fmtSched(selected.scheduled_departure)],
@@ -417,6 +418,7 @@ export default function FlightMap() {
     ? [
       ["Aircraft", selected.model],
       ["Type", selected.typecode],
+      ["Flight Type", selected.plane_type],
       ["Category", aircraftCategoryLabel(selected.category)],
       ["Maker", selected.manufacturername],
       ["Registration", selected.registration],
@@ -518,8 +520,7 @@ export default function FlightMap() {
           filteredPlanes={filteredPlanes}
           query={query}
           onQueryChange={setQuery}
-          sortDesc={sortDesc}
-          onToggleSortDesc={() => setSortDesc((v) => !v)}
+
           selectedIcao24={selected?.icao24}
           onSelectPlane={selectPlane}
           airportList={airportList}

@@ -1,27 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import type { StateVector, Airport } from "@/lib/types";
-import { timeAgo, posSecs } from "@/lib/format";
+import { timeAgo } from "@/lib/format";
+import { planeTypeBadgeClass, planeTypeShortLabel } from "@/lib/planeType";
+import { squawkAlertLevel } from "@/lib/squawk";
 
-function makePlaneComparator(
-  sortDesc: boolean,
-  selectedIcao24: string | null | undefined
-) {
-  return (a: StateVector, b: StateVector) => {
-    if (selectedIcao24) {
-      const aSel = a.icao24 === selectedIcao24;
-      const bSel = b.icao24 === selectedIcao24;
-      if (aSel && !bSel) return -1;
-      if (bSel && !aSel) return 1;
-    }
-    const tA = posSecs(a.last_time_position);
-    const tB = posSecs(b.last_time_position);
-    const valA = Number.isNaN(tA) ? 0 : tA;
-    const valB = Number.isNaN(tB) ? 0 : tB;
-    if (valA !== valB) return sortDesc ? valB - valA : valA - valB;
-    return (a.callsign ?? "").localeCompare(b.callsign ?? "");
-  };
-}
+
 
 type SidePanelProps = {
   panelTab: "flights" | "airports";
@@ -37,8 +22,7 @@ type SidePanelProps = {
   filteredPlanes: StateVector[];
   query: string;
   onQueryChange: (q: string) => void;
-  sortDesc: boolean;
-  onToggleSortDesc: () => void;
+
   selectedIcao24: string | null | undefined;
   onSelectPlane: (p: StateVector) => void;
 
@@ -67,8 +51,7 @@ export default function SidePanel({
   filteredPlanes,
   query,
   onQueryChange,
-  sortDesc,
-  onToggleSortDesc,
+
   selectedIcao24,
   onSelectPlane,
   airportList,
@@ -78,6 +61,10 @@ export default function SidePanel({
   selectedAirport,
   onSelectAirport,
 }: SidePanelProps) {
+  const [showMilitary, setShowMilitary] = useState(true);
+  const [showLadd, setShowLadd] = useState(true);
+  const [showCivil, setShowCivil] = useState(true);
+
   const handleSelectPlane = (p: StateVector) => {
     onSelectPlane(p);
   };
@@ -85,6 +72,25 @@ export default function SidePanel({
   const handleSelectAirport = (a: Airport) => {
     onSelectAirport(a);
   };
+
+  const getPlaneTypePriority = (type: string | null | undefined): number => {
+    switch (type) {
+      case "Military": return 1;
+      case "Interesting": return 2;
+      case "LADD": return 3;
+      default: return 4;
+    }
+  };
+
+  const sortedPlanes = [...filteredPlanes].sort((a, b) => {
+    return getPlaneTypePriority(a.plane_type) - getPlaneTypePriority(b.plane_type);
+  });
+
+  const displayedPlanes = sortedPlanes.filter((p) => {
+    if (p.plane_type === "Military") return showMilitary;
+    if (p.plane_type === "LADD") return showLadd;
+    return showCivil;
+  });
 
   return (
     <>
@@ -133,7 +139,7 @@ export default function SidePanel({
                 : "border-transparent text-white/50 hover:text-white/80"
                 }`}
             >
-              Flights ({planeList.length})
+              Flights ({displayedPlanes.length})
             </button>
             <button
               type="button"
@@ -157,70 +163,112 @@ export default function SidePanel({
                   placeholder="Search callsign / airline / route…"
                   className="flex-1 rounded border border-white/15 bg-white/10 px-3 py-2 text-base text-white/90 placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
                 />
+              </div>
+              <div className="flex gap-1.5 pb-2 shrink-0 justify-start">
                 <button
                   type="button"
-                  onClick={onToggleSortDesc}
-                  className="rounded border border-white/15 bg-white/10 px-3 py-2 text-white/90 font-medium shrink-0 min-w-10 flex items-center justify-center"
+                  onClick={() => setShowMilitary(v => !v)}
+                  className={`rounded px-2.5 py-1.5 text-xs font-bold border transition-all ${showMilitary
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    : "bg-white/5 text-white/35 border-white/5 opacity-60"
+                    }`}
                 >
-                  <span>{sortDesc ? "↓" : "↑"}</span>
+                  Military
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLadd(v => !v)}
+                  className={`rounded px-2.5 py-1.5 text-xs font-bold border transition-all ${showLadd
+                    ? "bg-slate-500/20 text-slate-300 border-slate-500/40"
+                    : "bg-white/5 text-white/35 border-white/5 opacity-60"
+                    }`}
+                >
+                  LADD
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCivil(v => !v)}
+                  className={`rounded px-2.5 py-1.5 text-xs font-bold border transition-all ${showCivil
+                    ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                    : "bg-white/5 text-white/35 border-white/5 opacity-60"
+                    }`}
+                >
+                  Civil
                 </button>
               </div>
               <ul className="divide-y divide-white/10 overflow-y-auto flex-1 text-xs">
-                {[...filteredPlanes]
-                  .sort(makePlaneComparator(sortDesc, selectedIcao24))
-                  .map((p) => {
-                    const cs = (p.callsign ?? "").trim() || p.icao24;
-                    const alt =
-                      typeof p.baro_altitude === "number"
-                        ? `${Math.round(
-                          p.baro_altitude * 3.281
-                        ).toLocaleString()} ft`
-                        : "—";
-                    const spd =
-                      typeof p.velocity === "number"
-                        ? `${Math.round(p.velocity * 1.944)} kts`
-                        : "—";
-                    const route =
-                      p.origin_iata || p.destination_iata
-                        ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
-                        }`
-                        : null;
-                    const ago = timeAgo(p.last_time_position);
-                    const meta = [p.flight_status, ago]
-                      .filter(Boolean)
-                      .join(" · ");
-                    return (
-                      <li key={p.icao24}>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectPlane(p)}
-                          className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/25" : ""
-                            }`}
-                        >
-                          <span className="flex w-full items-center justify-between gap-2">
-                            <span className="flex items-center gap-2 truncate">
+                {displayedPlanes.map((p) => {
+                  const cs = (p.callsign ?? "").trim() || p.icao24;
+                  const alt =
+                    typeof p.baro_altitude === "number"
+                      ? `${Math.round(
+                        p.baro_altitude * 3.281
+                      ).toLocaleString()} ft`
+                      : "—";
+                  const spd =
+                    typeof p.velocity === "number"
+                      ? `${Math.round(p.velocity * 1.944)} kts`
+                      : "—";
+                  const route =
+                    p.origin_iata || p.destination_iata
+                      ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
+                      }`
+                      : null;
+                  const ago = timeAgo(p.last_time_position);
+                  const meta = [p.flight_status, ago]
+                    .filter(Boolean)
+                    .join(" · ");
+                  return (
+                    <li key={p.icao24}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPlane(p)}
+                        className={`flex w-full flex-col gap-1 px-3 py-2.5 text-left active:bg-white/15 hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/25" : ""
+                          }`}
+                      >
+                        <span className="flex w-full items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 truncate">
+                            <span
+                              className={`inline-block h-2 w-2 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                                }`}
+                            />
+                            <span className="truncate font-semibold text-white text-sm">
+                              {cs}
+                            </span>
+                            {planeTypeBadgeClass(p.plane_type) && (
                               <span
-                                className={`inline-block h-2 w-2 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                                  }`}
-                              />
-                              <span className="truncate font-semibold text-white text-sm">
-                                {cs}
+                                className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${planeTypeBadgeClass(p.plane_type)}`}
+                              >
+                                {planeTypeShortLabel(p.plane_type)}
                               </span>
-                            </span>
-                            <span className="shrink-0 text-white/60 text-xs">
-                              {alt} · {spd}
-                            </span>
+                            )}
                           </span>
-                          {(route || meta) && (
-                            <span className="flex w-full items-center justify-between gap-2 pl-4 text-xs text-white/50">
-                              <span className="truncate">{route ?? ""}</span>
-                              {meta && <span className="shrink-0">{meta}</span>}
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
+                          <span className="shrink-0 text-white/60 text-xs flex items-center gap-1.5">
+                            <span>{alt} · {spd}</span>
+                            {p.squawk && (
+                              <span
+                                className={`shrink-0 rounded px-1 py-px text-[9px] font-mono font-bold leading-none ${squawkAlertLevel(p.squawk) === "emergency"
+                                  ? "bg-red-600/35 text-red-200 border-red-500/50 animate-pulse"
+                                  : squawkAlertLevel(p.squawk) === "operational"
+                                    ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
+                                    : "bg-white/5 text-white/70 border-white/10"
+                                  }`}
+                              >
+                                {p.squawk}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                        {(route || meta) && (
+                          <span className="flex w-full items-center justify-between gap-2 pl-4 text-xs text-white/50">
+                            <span className="truncate">{route ?? ""}</span>
+                            {meta && <span className="shrink-0">{meta}</span>}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -285,7 +333,7 @@ export default function SidePanel({
               : "border-transparent text-white/50 hover:text-white/80"
               }`}
           >
-            Flights ({planeList.length})
+            Flights ({displayedPlanes.length})
           </button>
           <button
             type="button"
@@ -316,75 +364,110 @@ export default function SidePanel({
                 placeholder="Search callsign / airline / route…"
                 className="flex-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 placeholder:text-white/35 focus:border-white/25 focus:outline-none"
               />
+            </div>
+            <div className="flex gap-1 px-2 pb-1.5 justify-start">
               <button
                 type="button"
-                onClick={onToggleSortDesc}
-                title={
-                  sortDesc
-                    ? "Sorting: Newest First (Desc)"
-                    : "Sorting: Oldest First (Asc)"
-                }
-                className="rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 hover:bg-white/10 hover:border-white/25 focus:outline-none flex items-center justify-center font-medium shrink-0 min-w-10"
+                onClick={() => setShowMilitary(v => !v)}
+                className={`rounded px-2 py-1 text-[10px] font-bold border transition-all ${showMilitary
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                  : "bg-white/5 text-white/35 border-white/5 opacity-60"
+                  }`}
               >
-                <span>{sortDesc ? "↓" : "↑"}</span>
+                Military
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLadd(v => !v)}
+                className={`rounded px-2 py-1 text-[10px] font-bold border transition-all ${showLadd
+                  ? "bg-slate-500/20 text-slate-300 border-slate-500/40"
+                  : "bg-white/5 text-white/35 border-white/5 opacity-60"
+                  }`}
+              >
+                LADD
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCivil(v => !v)}
+                className={`rounded px-2 py-1 text-[10px] font-bold border transition-all ${showCivil
+                  ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                  : "bg-white/5 text-white/35 border-white/5 opacity-60"
+                  }`}
+              >
+                Civil
               </button>
             </div>
             <ul className="divide-y divide-white/5 overflow-y-auto">
-              {[...filteredPlanes]
-                .sort(makePlaneComparator(sortDesc, selectedIcao24))
-                .map((p) => {
-                  const cs = (p.callsign ?? "").trim() || p.icao24;
-                  const alt =
-                    typeof p.baro_altitude === "number"
-                      ? `${Math.round(
-                        p.baro_altitude * 3.281
-                      ).toLocaleString()} ft`
-                      : "—";
-                  const spd =
-                    typeof p.velocity === "number"
-                      ? `${Math.round(p.velocity * 1.944)} kts`
-                      : "—";
-                  const route =
-                    p.origin_iata || p.destination_iata
-                      ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
-                      }`
-                      : null;
-                  const ago = timeAgo(p.last_time_position);
-                  const meta = [p.flight_status, ago]
-                    .filter(Boolean)
-                    .join(" · ");
-                  return (
-                    <li key={p.icao24}>
-                      <button
-                        type="button"
-                        onClick={() => handleSelectPlane(p)}
-                        className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/20" : ""
-                          }`}
-                      >
-                        <span className="flex w-full items-center justify-between gap-2">
-                          <span className="flex items-center gap-1.5 truncate">
+              {displayedPlanes.map((p) => {
+                const cs = (p.callsign ?? "").trim() || p.icao24;
+                const alt =
+                  typeof p.baro_altitude === "number"
+                    ? `${Math.round(
+                      p.baro_altitude * 3.281
+                    ).toLocaleString()} ft`
+                    : "—";
+                const spd =
+                  typeof p.velocity === "number"
+                    ? `${Math.round(p.velocity * 1.944)} kts`
+                    : "—";
+                const route =
+                  p.origin_iata || p.destination_iata
+                    ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
+                    }`
+                    : null;
+                const ago = timeAgo(p.last_time_position);
+                const meta = [p.flight_status, ago]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <li key={p.icao24}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPlane(p)}
+                      className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-white/10 ${selectedIcao24 === p.icao24 ? "bg-sky-500/20" : ""
+                        }`}
+                    >
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span
+                            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
+                              }`}
+                          />
+                          <span className="truncate font-medium text-white/90">{cs}</span>
+                          {planeTypeBadgeClass(p.plane_type) && (
                             <span
-                              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
-                                }`}
-                            />
-                            <span className="truncate font-medium text-white/90">
-                              {cs}
+                              className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${planeTypeBadgeClass(p.plane_type)}`}
+                            >
+                              {planeTypeShortLabel(p.plane_type)}
                             </span>
-                          </span>
-                          <span className="shrink-0 text-white/50">
-                            {alt} · {spd}
-                          </span>
+                          )}
                         </span>
-                        {(route || meta) && (
-                          <span className="flex w-full items-center justify-between gap-2 pl-3 text-[10px] text-white/45">
-                            <span className="truncate">{route ?? ""}</span>
-                            {meta && <span className="shrink-0">{meta}</span>}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
+                        <span className="shrink-0 text-white/50 flex items-center gap-1.5">
+                          <span>{alt} · {spd}</span>
+                          {p.squawk && (
+                            <span
+                              className={`shrink-0 rounded px-1 py-px text-[8px] font-mono font-bold leading-none ${squawkAlertLevel(p.squawk) === "emergency"
+                                ? "bg-red-600/35 text-red-200 border-red-500/50 animate-pulse"
+                                : squawkAlertLevel(p.squawk) === "operational"
+                                  ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
+                                  : "bg-white/5 text-white/70 border-white/10"
+                                }`}
+                            >
+                              {p.squawk}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      {(route || meta) && (
+                        <span className="flex w-full items-center justify-between gap-2 pl-3 text-[10px] text-white/45">
+                          <span className="truncate">{route ?? ""}</span>
+                          {meta && <span className="shrink-0">{meta}</span>}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}
