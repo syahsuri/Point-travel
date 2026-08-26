@@ -12,6 +12,7 @@ type AirportDetailSidebarProps = {
   scheduleLoading: boolean;
   fmtSchedText: (iso: string | null) => string | null;
   statusTextClassFn: (status: string | null | undefined) => string;
+  onScheduleClick: (entry: ScheduleEntry) => void;
 };
 
 /**
@@ -32,6 +33,7 @@ export default function AirportDetailSidebar({
   scheduleLoading,
   fmtSchedText,
   statusTextClassFn,
+  onScheduleClick,
 }: AirportDetailSidebarProps) {
   const airportKey = `${airport.icao_code ?? ""}|${airport.name}`;
   const [state, setState] = useState({ key: airportKey, isMinimized: true });
@@ -130,8 +132,8 @@ export default function AirportDetailSidebar({
           type="button"
           onClick={() => onAirportBoardTabChange("departure")}
           className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "departure"
-              ? "border-sky-500 text-white bg-white/5"
-              : "border-transparent text-white/50 hover:text-white/80"
+            ? "border-sky-500 text-white bg-white/5"
+            : "border-transparent text-white/50 hover:text-white/80"
             }`}
         >
           Departures
@@ -140,8 +142,8 @@ export default function AirportDetailSidebar({
           type="button"
           onClick={() => onAirportBoardTabChange("arrival")}
           className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-all focus:outline-none ${airportBoardTab === "arrival"
-              ? "border-sky-500 text-white bg-white/5"
-              : "border-transparent text-white/50 hover:text-white/80"
+            ? "border-sky-500 text-white bg-white/5"
+            : "border-transparent text-white/50 hover:text-white/80"
             }`}
         >
           Arrivals
@@ -161,30 +163,48 @@ export default function AirportDetailSidebar({
             {schedule.map((s, i) => {
               const time = fmtSchedText(s.sched_time);
               const route = s.route_airport_iata ?? "???";
+              const clickable =
+                (s.board_status === "EnRoute" || s.board_status === "Landed") &&
+                !!s.icao24;
               return (
-                <li
-                  key={`${s.flight_no ?? s.callsign ?? i}-${s.sched_time ?? i}`}
-                  className="flex flex-col gap-0.5 px-3 py-1.5"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-medium text-white/90">
-                      {s.flight_no ?? s.callsign ?? "—"}
-                    </span>
-                    <span className="shrink-0 truncate text-white/50">
-                      {s.airline_name ?? ""}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-[10px]">
-                    <span className="text-white/60">{time ?? "—"}</span>
-                    {s.board_status && (
-                      <span className={`font-medium ${statusTextClassFn(s.board_status)}`}>
-                        {s.board_status}
+                <li key={`${s.flight_no ?? s.callsign ?? i}-${s.sched_time ?? i}`}>
+                  <div
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onClick={clickable ? () => onScheduleClick(s) : undefined}
+                    onKeyDown={
+                      clickable
+                        ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onScheduleClick(s);
+                          }
+                        }
+                        : undefined
+                    }
+                    className={`flex flex-col gap-0.5 px-3 py-1.5 ${clickable ? "cursor-pointer hover:bg-white/10" : ""
+                      }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-medium text-white/90">
+                        {s.flight_no ?? s.callsign ?? "—"}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-[10px] text-white/45">
-                    <span>{airportBoardTab === "departure" ? "To" : "From"}</span>
-                    <span className="truncate">{route}</span>
+                      <span className="shrink-0 truncate text-white/50">
+                        {s.airline_name ?? ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-[10px]">
+                      <span className="text-white/60">{time ?? "—"}</span>
+                      {s.board_status && (
+                        <span className={`font-medium ${statusTextClassFn(s.board_status)}`}>
+                          {s.board_status}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-[10px] text-white/45">
+                      <span>{airportBoardTab === "departure" ? "To" : "From"}</span>
+                      <span className="truncate">{route}</span>
+                    </div>
                   </div>
                 </li>
               );

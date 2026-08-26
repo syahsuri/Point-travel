@@ -16,6 +16,7 @@ import { useFlightMapEngine } from "@/lib/hooks/useFlightMapEngine";
 import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
 import { DEFAULT_PLANE_COLOR } from "@/lib/mapConstants";
+import type { ScheduleEntry } from "@/lib/types";
 
 import ClockBadge from "@/components/flight-map/ClockBadge";
 import TravelBadge from "@/components/flight-map/TravelBadge";
@@ -232,6 +233,16 @@ export default function FlightMap() {
     }
   }
 
+  function handleScheduleClick(entry: ScheduleEntry) {
+    if (entry.board_status !== "EnRoute" && entry.board_status !== "Landed") {
+      return;
+    }
+    if (!entry.icao24) return;
+    const plane = planeList.find((p) => p.icao24 === entry.icao24);
+    if (plane) {
+      selectPlane(plane);
+    }
+  }
   useFlightMapEngine({
     containerRef,
     mapRef,
@@ -561,6 +572,7 @@ export default function FlightMap() {
             scheduleLoading={scheduleLoading}
             fmtSchedText={fmtSched}
             statusTextClassFn={statusTextClass}
+            onScheduleClick={handleScheduleClick}
           />
         )}
         <AttributionFooter />
