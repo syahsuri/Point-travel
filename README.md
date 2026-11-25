@@ -141,3 +141,5 @@ docker run -p 3000:3000 point-travel
 ---
 
 *This project is built as a highly responsive Next.js application, utilizing client-side canvas layers for fast rendering and server-side routes to communicate with the flight tracking endpoints.*
+
+# RERUN
