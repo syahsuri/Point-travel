@@ -154,7 +154,34 @@ export function angDelta(a: number, b: number): number {
       );
     return [(lo2 * 180) / Math.PI, (la2 * 180) / Math.PI];
   }
-  
+
+  /**
+   * Dead reckoning through a constant-rate turn: moves along the arc's chord
+   * (bearing track + ω·dt/2, length v·dt·sin(h)/h with h = ω·dt/2) so the plane
+   * traces a circle instead of spiralling outward. Returns [lon, lat, heading
+   * at the end of the arc]; heading is null when the track is unknown.
+   */
+  export function arcReckon(
+    lon: number,
+    lat: number,
+    velocityMs: number | null,
+    trackDeg: number | null,
+    turnRateDegPerSec: number,
+    dtSec: number
+  ): [number, number, number | null] {
+    if (typeof trackDeg !== "number") return [lon, lat, null];
+    const h = (turnRateDegPerSec * Math.PI * dtSec) / 360;
+    const chordRatio = Math.abs(h) < 1e-6 ? 1 : Math.sin(h) / h;
+    const [lo, la] = deadReckon(
+      lon,
+      lat,
+      typeof velocityMs === "number" ? velocityMs * chordRatio : null,
+      trackDeg + (turnRateDegPerSec * dtSec) / 2,
+      dtSec
+    );
+    return [lo, la, (((trackDeg + turnRateDegPerSec * dtSec) % 360) + 360) % 360];
+  }
+
   /**
    * Forward-projected path from a live position over `horizonSec` seconds.
    * Integrates in fine `stepSec` steps, rotating the heading by

@@ -13,7 +13,8 @@ import { altitudeColorForValue } from "@/lib/altitudeColor";
 import { ALL_CATEGORY_ICON_CODES } from "@/lib/aircraftIcon";
 
 import {
-  deadReckon,
+  angDelta,
+  arcReckon,
   greatCircle,
   predictPath,
   smoothPath,
@@ -70,6 +71,9 @@ type UseFlightMapEngineArgs = {
  * Runs once on mount. Cleans up the map instance on unmount.
  */
 const RENDER_DELAY_MS = 16_000; // sedikit di atas POLL_MS biar keyframe kedua selalu siap
+// Stop extrapolating after this long without a fresh report: past it the
+// guessed position drifts too far from reality. The plane holds until new data.
+const MAX_EXTRAP_SEC = 60;
 
 type Keyframe = { t: number; lon: number; lat: number; track: number | null };
 
@@ -768,30 +772,41 @@ export function useFlightMapEngine({
             const kfs = keyframesRef.get(p.icao24);
             if (!kfs || kfs.length === 0) return p;
 
-            if (kfs.length === 1) {
-              // pesawat baru muncul, baru ada 1 titik nyata
-              const [k0] = kfs;
-              const dt = Math.max(0, renderTimeSec - k0.t);
-              if (
-                dt <= 0 ||
-                typeof p.velocity !== "number" ||
-                typeof k0.track !== "number"
-              ) {
-                return { ...p, longitude: k0.lon, latitude: k0.lat };
-              }
-              const [lon, lat] = deadReckon(
-                k0.lon,
-                k0.lat,
+            // Dead-reckon from the newest real point along the current turn.
+            // true_track is replaced with the extrapolated heading so the icon
+            // points where the plane is actually being moved.
+            const extrapolate = (k: Keyframe) => {
+              const dt = Math.min(
+                Math.max(0, renderTimeSec - k.t),
+                MAX_EXTRAP_SEC
+              );
+              const [lon, lat, track] = arcReckon(
+                k.lon,
+                k.lat,
                 p.velocity,
-                k0.track,
+                k.track,
+                turnRateRef.current.get(p.icao24) ?? 0,
                 dt
               );
-              return { ...p, longitude: lon, latitude: lat };
-            }
+              return {
+                ...p,
+                longitude: lon,
+                latitude: lat,
+                true_track: track ?? p.true_track,
+              };
+            };
+
+            // pesawat baru muncul, baru ada 1 titik nyata
+            if (kfs.length === 1) return extrapolate(kfs[0]);
 
             const [k0, k1] = kfs;
             if (renderTimeSec <= k0.t) {
-              return { ...p, longitude: k0.lon, latitude: k0.lat };
+              return {
+                ...p,
+                longitude: k0.lon,
+                latitude: k0.lat,
+                true_track: k0.track ?? p.true_track,
+              };
             }
             if (renderTimeSec <= k1.t) {
               // kondisi normal: interpolasi di antara 2 titik nyata
@@ -801,27 +816,15 @@ export function useFlightMapEngine({
                 ...p,
                 longitude: k0.lon + (k1.lon - k0.lon) * frac,
                 latitude: k0.lat + (k1.lat - k0.lat) * frac,
+                true_track:
+                  typeof k0.track === "number" && typeof k1.track === "number"
+                    ? k0.track + angDelta(k1.track, k0.track) * frac
+                    : p.true_track,
               };
             }
 
             // poll berikutnya telat / buffer habis -> fallback dead-reckon
-            const dt = renderTimeSec - k1.t;
-            const omega = turnRateRef.current.get(p.icao24) ?? 0;
-            const heading =
-              typeof k1.track === "number"
-                ? k1.track + omega * (dt / 2)
-                : k1.track;
-            if (typeof p.velocity !== "number" || typeof heading !== "number") {
-              return { ...p, longitude: k1.lon, latitude: k1.lat };
-            }
-            const [lon, lat] = deadReckon(
-              k1.lon,
-              k1.lat,
-              p.velocity,
-              heading,
-              dt
-            );
-            return { ...p, longitude: lon, latitude: lat };
+            return extrapolate(k1);
           });
           for (const mp of moved) {
             if (!mp.on_ground) {

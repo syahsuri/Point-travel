@@ -37,7 +37,9 @@ export function useNearMissRadar({ mapRef }: UseNearMissRadarArgs) {
       if (Number.isNaN(t)) continue;
       const prev = prevTrackRef.current.get(p.icao24);
       if (prev && t > prev.t) {
-        const raw = angDelta(p.true_track, prev.track) / (t - prev.t);
+        const gap = t - prev.t;
+        // Over a long gap the turn may have ended or wrapped past 180°: don't trust it.
+        const raw = gap > 60 ? 0 : angDelta(p.true_track, prev.track) / gap;
         turnRateRef.current.set(p.icao24, Math.max(-3, Math.min(3, raw)));
       }
       prevTrackRef.current.set(p.icao24, { track: p.true_track, t });
