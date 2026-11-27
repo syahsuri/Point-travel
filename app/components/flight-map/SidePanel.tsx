@@ -75,6 +75,7 @@ export default function SidePanel({
 
   const getPlaneTypePriority = (type: string | null | undefined): number => {
     switch (type) {
+      case "Military & Special": return 0;
       case "Military": return 1;
       case "Interesting": return 2;
       case "LADD": return 3;
@@ -87,7 +88,7 @@ export default function SidePanel({
   });
 
   const displayedPlanes = sortedPlanes.filter((p) => {
-    if (p.plane_type === "Military") return showMilitary;
+    if (p.plane_type === "Military" || p.plane_type === "Military & Special") return showMilitary;
     if (p.plane_type === "LADD") return showLadd;
     return showCivil;
   });

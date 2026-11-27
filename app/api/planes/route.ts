@@ -56,66 +56,89 @@ function toStateVector(r: RawState): StateVector | null {
   };
 }
 
+// The backend rate-limits /flights to 30/min per IP and every browser reaches
+// it through this server's IP, so one snapshot is shared by all users and
+// concurrent requests wait on the same backend call.
+const CACHE_TTL_MS = 10_000;
+let cached: { at: number; payload: string } | null = null;
+let inflight: Promise<string> | null = null;
+
+function refresh(): Promise<string> {
+  inflight ??= fetchPayload()
+    .then((payload) => {
+      cached = { at: Date.now(), payload };
+      return payload;
+    })
+    .finally(() => {
+      inflight = null;
+    });
+  return inflight;
+}
+
 export async function GET() {
   try {
-    const res = await fetchRetry(BACKEND_URL, {
-      cache: "no-store",
-      headers: AUTH_TOKEN ? { auth_token: AUTH_TOKEN } : undefined,
-    });
-    if (!res.ok) throw new Error(`backend ${res.status}`);
-
-    const raw = (await res.json()) as unknown;
-    const list: RawState[] = Array.isArray(raw)
-      ? raw
-      : Array.isArray((raw as { states?: unknown }).states)
-        ? (raw as { states: RawState[] }).states
-        : [];
-
-    const parsed = list
-      .map(toStateVector)
-      .filter((s): s is StateVector => s !== null);
-
-    const reportSecs = (iso: string | null): number => {
-      if (!iso) return 0;
-      const withTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
-      const ms = Date.parse(withTz);
-      return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
-    };
-
-    const byIcao = new Map<string, StateVector>();
-    for (const s of parsed) {
-      const prev = byIcao.get(s.icao24);
-      if (
-        !prev ||
-        reportSecs(s.last_time_position) >= reportSecs(prev.last_time_position)
-      ) {
-        byIcao.set(s.icao24, s);
-      }
-    }
-    const states = [...byIcao.values()];
-
-    const time = list.reduce((max, r) => {
-      const t =
-        typeof r.last_time_position === "string"
-          ? reportSecs(r.last_time_position)
-          : typeof r.last_contact === "number"
-            ? r.last_contact
-            : 0;
-      return Math.max(max, t);
-    }, Math.floor(Date.now() / 1000));
-
-    const payload = Buffer.from(JSON.stringify({ time, states })).toString(
-      "base64"
-    );
+    const payload =
+      cached && Date.now() - cached.at < CACHE_TTL_MS
+        ? cached.payload
+        : await refresh();
     return Response.json(
       { data: payload },
       { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" } }
     );
   } catch (err) {
     console.error("[/api/planes]", err);
-    const fallbackPayload = Buffer.from(
-      JSON.stringify({ time: Math.floor(Date.now() / 1000), states: [] })
-    ).toString("base64");
-    return Response.json({ data: fallbackPayload });
+    // Non-2xx makes the client keep its current planes; a 200 with an empty
+    // list would blank the map for every user on one backend hiccup.
+    return Response.json({ error: "backend unavailable" }, { status: 502 });
   }
+}
+
+async function fetchPayload(): Promise<string> {
+  const res = await fetchRetry(BACKEND_URL, {
+    cache: "no-store",
+    headers: AUTH_TOKEN ? { auth_token: AUTH_TOKEN } : undefined,
+  });
+  if (!res.ok) throw new Error(`backend ${res.status}`);
+
+  const raw = (await res.json()) as unknown;
+  const list: RawState[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { states?: unknown }).states)
+      ? (raw as { states: RawState[] }).states
+      : [];
+
+  const parsed = list
+    .map(toStateVector)
+    .filter((s): s is StateVector => s !== null);
+
+  const reportSecs = (iso: string | null): number => {
+    if (!iso) return 0;
+    const withTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+    const ms = Date.parse(withTz);
+    return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
+  };
+
+  const byIcao = new Map<string, StateVector>();
+  for (const s of parsed) {
+    const prev = byIcao.get(s.icao24);
+    if (
+      !prev ||
+      reportSecs(s.last_time_position) >= reportSecs(prev.last_time_position)
+    ) {
+      byIcao.set(s.icao24, s);
+    }
+  }
+  const states = [...byIcao.values()];
+
+  const time = list.reduce((max, r) => {
+    const t =
+      typeof r.last_time_position === "string"
+        ? reportSecs(r.last_time_position)
+        : typeof r.last_contact === "number"
+          ? r.last_contact
+          : 0;
+    return Math.max(max, t);
+  }, Math.floor(Date.now() / 1000));
+
+  return Buffer.from(JSON.stringify({ time, states })).toString("base64");
 }

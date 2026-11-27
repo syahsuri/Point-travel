@@ -3,25 +3,13 @@
 import { useEffect } from "react";
 import type { RefObject } from "react";
 import type maplibregl from "maplibre-gl";
+import { PLANE_ICON_SIZE } from "@/lib/mapConstants";
 
 type UseChaosModeVisualsArgs = {
   mapRef: RefObject<maplibregl.Map | null>;
   active: boolean;
 };
 
-const NORMAL_ICON_SIZE = [
-  "interpolate",
-  ["linear"],
-  ["zoom"],
-  4,
-  0.6,
-  7,
-  0.9,
-  10,
-  1.2,
-  13,
-  1.5,
-] as const;
 
 /**
  * Drives the `planes` layer's visuals during chaos mode: swaps the icon to
@@ -35,8 +23,8 @@ export function useChaosModeVisuals({ mapRef, active }: UseChaosModeVisualsArgs)
     if (!map.getLayer("planes")) return;
 
     if (!active) {
-      map.setLayoutProperty("planes", "icon-size", [...NORMAL_ICON_SIZE]);
-      map.setLayoutProperty("planes", "icon-image", "plane-sdf");
+      // icon-image is restored by FlightMap's category-icon effect.
+      map.setLayoutProperty("planes", "icon-size", PLANE_ICON_SIZE);
       return;
     }
 

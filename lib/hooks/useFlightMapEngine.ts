@@ -26,6 +26,7 @@ import {
   PLANE_SDF_ICON_SRC,
   PLANE_SDF_ICON_H,
   PLANE_SDF_ICON_W,
+  PLANE_ICON_SIZE,
 } from "@/lib/mapConstants";
 import type { StateVector, Airport } from "@/lib/types";
 
@@ -254,10 +255,13 @@ export function useFlightMapEngine({
         let planes: StateVector[] = [];
         const cached = readPlanesCache();
         const loadStartedAt = Date.now();
+        // When the shown data was fetched; the first poll waits POLL_MS from here.
+        let dataFetchedAt = loadStartedAt;
 
         if (cached && loadStartedAt - cached.fetchedAt < POLL_MS) {
           planes = cached.states;
           lastApiTimeRef.current = cached.time;
+          dataFetchedAt = cached.fetchedAt;
         } else {
           try {
             const res = await loadPlanes();
@@ -694,19 +698,7 @@ export function useFlightMapEngine({
               "plane-cat-a0",
             ],
             "icon-rotate": ["get", "track"],
-            "icon-size": [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              4,
-              0.33,
-              7,
-              0.48,
-              10,
-              0.63,
-              13,
-              0.78,
-            ],
+            "icon-size": PLANE_ICON_SIZE,
             "icon-rotation-alignment": "map",
             "icon-allow-overlap": true,
           },
@@ -1022,8 +1014,7 @@ export function useFlightMapEngine({
           pollId = setTimeout(pollTick, POLL_MS);
         }
 
-        const cacheAgeMs = cached ? Date.now() - cached.fetchedAt : 0;
-        const firstDelay = Math.max(0, POLL_MS - cacheAgeMs);
+        const firstDelay = Math.max(0, POLL_MS - (Date.now() - dataFetchedAt));
         pollId = setTimeout(pollTick, firstDelay);
       }
     });

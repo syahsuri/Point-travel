@@ -1,4 +1,22 @@
+import type { ExpressionSpecification } from "maplibre-gl";
+
 export type Basemap = "dark" | "satellite" | "streets";
+
+// `planes` layer icon size by zoom. Shared with chaos mode so leaving it
+// restores exactly the size the engine set.
+export const PLANE_ICON_SIZE: ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  4,
+  0.33,
+  7,
+  0.48,
+  10,
+  0.63,
+  13,
+  0.78,
+];
 
 // Indonesia bounding box [west, south, east, north] — keeps the initial view
 // (and the data we care about) scoped small.

@@ -13,7 +13,6 @@ import { timeAgo, fmtSched, statusTextClass, aircraftCategoryLabel } from "@/lib
 import { type Basemap, INDONESIA_BOUNDS } from "@/lib/mapConstants";
 import { setBasemap } from "@/lib/mapStyle";
 import { useFlightMapEngine } from "@/lib/hooks/useFlightMapEngine";
-import { usePlanePhoto } from "@/lib/hooks/usePlanePhoto";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
 import { DEFAULT_PLANE_COLOR } from "@/lib/mapConstants";
 import type { ScheduleEntry } from "@/lib/types";
@@ -378,8 +377,6 @@ export default function FlightMap() {
       remainingKm: remaining / 1000,
     };
   })();
-
-  const { } = usePlanePhoto(selected?.icao24);
 
   const flightDetailRows: [string, string | null][] = selected
     ? [

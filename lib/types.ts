@@ -9,7 +9,12 @@
  * Units follow OpenSky: lon/lat in degrees, altitude in meters, velocity in
  * m/s, true_track in decimal degrees clockwise from north (0 = north).
  */
-export type PlaneType = "Military" | "Interesting" | "LADD" | "Civil";
+export type PlaneType =
+  | "Military & Special"
+  | "Military"
+  | "Interesting"
+  | "LADD"
+  | "Civil";
 
 export interface StateVector {
   /** Unique ICAO 24-bit address of the transponder, hex string. Stable id. */
