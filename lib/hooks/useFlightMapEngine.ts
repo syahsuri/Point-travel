@@ -72,9 +72,22 @@ type UseFlightMapEngineArgs = {
 const RENDER_DELAY_MS = 16_000; // sedikit di atas POLL_MS biar keyframe kedua selalu siap
 // Stop extrapolating after this long without a fresh report: past it the
 // guessed position drifts too far from reality. The plane holds until new data.
-const MAX_EXTRAP_SEC = 60;
+// Counted from when the report reached the browser: reports arrive ~1–2 min
+// after they were made (pipeline lag), so counting from report time froze
+// every plane. 120s covers the usual gap between reports (p90 ~66s, 2026-11-28)
+// with room for a late poll.
+const MAX_EXTRAP_SEC = 120;
+// A report already this old on arrival is stale (pipeline "Lost Signal" uses
+// the same 300s): its cap counts from report time, so it is not flown minutes ahead.
+const STALE_REPORT_SEC = 300;
 
-type Keyframe = { t: number; lon: number; lat: number; track: number | null };
+type Keyframe = {
+  t: number; // report time (s)
+  recv: number; // when this report reached the browser (s)
+  lon: number;
+  lat: number;
+  track: number | null;
+};
 
 function keyframeTime(p: StateVector, fallbackSec: number): number {
   const parsed = posSecs(p.last_time_position);
@@ -185,7 +198,13 @@ export function useFlightMapEngine({
       const t = keyframeTime(p, fallbackSec);
       const arr = keyframesRef.get(p.icao24) ?? [];
       if (arr.length && arr[arr.length - 1].t === t) return; // report duplikat
-      arr.push({ t, lon: p.longitude, lat: p.latitude, track: p.true_track });
+      arr.push({
+        t,
+        recv: Date.now() / 1000,
+        lon: p.longitude,
+        lat: p.latitude,
+        track: p.true_track,
+      });
       if (arr.length > 2) arr.shift();
       keyframesRef.set(p.icao24, arr);
     }
@@ -765,9 +784,11 @@ export function useFlightMapEngine({
             // true_track is replaced with the extrapolated heading so the icon
             // points where the plane is actually being moved.
             const extrapolate = (k: Keyframe) => {
+              const lagOnArrival = Math.max(0, k.recv - k.t);
               const dt = Math.min(
                 Math.max(0, renderTimeSec - k.t),
-                MAX_EXTRAP_SEC
+                (lagOnArrival < STALE_REPORT_SEC ? lagOnArrival : 0) +
+                  MAX_EXTRAP_SEC
               );
               const [lon, lat, track] = arcReckon(
                 k.lon,
