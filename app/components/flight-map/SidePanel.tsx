@@ -136,6 +136,7 @@ export default function SidePanel({
   const [showMilitary, setShowMilitary] = useState(true);
   const [showLadd, setShowLadd] = useState(true);
   const [showCivil, setShowCivil] = useState(true);
+  const [sortAZ, setSortAZ] = useState(false);
 
   const handleSelectPlane = (p: StateVector) => {
     onSelectPlane(p);
@@ -155,10 +156,16 @@ export default function SidePanel({
     }
   };
 
-  // Callsign as tie-breaker keeps rows from jumping on every 15s poll.
+  // Default: newest position first. A–Z (callsign only) keeps rows from
+  // jumping on every 15s poll. Callsign is the tie-breaker in both.
   const sortedPlanes = [...filteredPlanes].sort(
     (a, b) =>
       getPlaneTypePriority(a.plane_type) - getPlaneTypePriority(b.plane_type) ||
+      (sortAZ
+        ? 0
+        : // Infinity - Infinity is NaN (falsy), so two missing times fall through.
+          (ageSeconds(a.last_time_position) ?? Infinity) -
+          (ageSeconds(b.last_time_position) ?? Infinity)) ||
       Number(!a.callsign?.trim()) - Number(!b.callsign?.trim()) || // hex-only last
       callsignOf(a).localeCompare(callsignOf(b))
   );
@@ -188,6 +195,17 @@ export default function SidePanel({
       <FilterChip label="LADD" count={counts.ladd} on={showLadd} dotClass="bg-slate-300" onClick={() => setShowLadd((v) => !v)} sizeClass={sizeClass} />
       <FilterChip label="Civil" count={counts.civil} on={showCivil} dotClass="bg-sky-400" onClick={() => setShowCivil((v) => !v)} sizeClass={sizeClass} />
     </>
+  );
+
+  const renderSort = (sizeClass: string) => (
+    <button
+      type="button"
+      onClick={() => setSortAZ((v) => !v)}
+      title={sortAZ ? "Sorted A–Z. Tap to sort by latest update." : "Sorted by latest update. Tap to sort A–Z."}
+      className={`shrink-0 whitespace-nowrap rounded border border-white/15 font-semibold text-white/70 hover:bg-white/10 hover:text-white ${sizeClass}`}
+    >
+      ⇅ {sortAZ ? "A–Z" : "Latest"}
+    </button>
   );
 
   const renderUpdated = (sizeClass: string) =>
@@ -278,8 +296,9 @@ export default function SidePanel({
                   value={query}
                   onChange={(e) => onQueryChange(e.target.value)}
                   placeholder="Search callsign / airline / route…"
-                  className="flex-1 rounded border border-white/15 bg-white/10 px-3 py-2 text-base text-white/90 placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
+                  className="min-w-0 flex-1 rounded border border-white/15 bg-white/10 px-3 py-2 text-base text-white/90 placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
                 />
+                {renderSort("px-3 text-xs")}
               </div>
               <div className="flex gap-1.5 pb-2 shrink-0 justify-start">
                 {renderChips("px-2.5 py-1.5 text-xs")}
@@ -428,8 +447,9 @@ export default function SidePanel({
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
                 placeholder="Search callsign / airline / route…"
-                className="flex-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 placeholder:text-white/35 focus:border-white/25 focus:outline-none"
+                className="min-w-0 flex-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-white/90 placeholder:text-white/35 focus:border-white/25 focus:outline-none"
               />
+              {renderSort("px-2 text-[10px]")}
             </div>
             <div className="flex gap-1 px-2 pb-1.5 justify-start">
               {renderChips("px-2 py-0.5 text-[10px]")}
