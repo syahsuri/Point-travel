@@ -5,11 +5,21 @@
  * (no tz) meaning UTC — append Z so it's not read as local. "" if null/invalid.
  */
 export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return "";
+  return formatAge(ageSeconds(iso));
+}
+
+/** Seconds since an ISO timestamp (naive = UTC), or null if null/invalid. */
+export function ageSeconds(iso: string | null | undefined): number | null {
+  if (!iso) return null;
   const withTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
   const ms = Date.parse(withTz);
-  if (Number.isNaN(ms)) return "";
-  const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (Number.isNaN(ms)) return null;
+  return Math.max(0, Math.round((Date.now() - ms) / 1000));
+}
+
+/** "40s ago" / "3m ago" / "2h ago" / "1d ago"; "" for null. */
+export function formatAge(secs: number | null): string {
+  if (secs === null) return "";
   if (secs < 60) return `${secs}s ago`;
   const mins = Math.round(secs / 60);
   if (mins < 60) return `${mins}m ago`;

@@ -23,6 +23,11 @@ export const PLANE_ICON_SIZE: ExpressionSpecification = [
 export const INDONESIA_BOUNDS: [number, number, number, number] = [
   94, -11, 141, 7,
 ];
+// Phones: Sumatra–Bali incl. KL/SG, where most traffic is. All of Indonesia
+// in portrait is a thin strip between China and Australia.
+export const WEST_INDONESIA_BOUNDS: [number, number, number, number] = [
+  94, -9, 117, 6,
+];
 export const ASEAN_BOUNDS: [number, number, number, number] = [
   92, -20, 141, 29,
 ];
@@ -43,9 +48,13 @@ export const KONAMI_CODE = [
 
 export const DEFAULT_PLANE_COLOR = "#2754A5";
 
-export const PLANE_SDF_ICON_SRC = "/icons/plane-sdf.png";
-export const PLANE_SDF_ICON_W = 150;
-export const PLANE_SDF_ICON_H = 150;
+// Airport markers: large airports (OurAirports "large_airport") at every zoom,
+// the rest only from zoom 6 so the country view isn't buried in icons.
+export const AIRPORT_ZOOM_FILTER: ExpressionSpecification = [
+  "any",
+  ["==", ["get", "type"], "large_airport"],
+  [">=", ["zoom"], 6],
+];
 
 export const SELECTED_PLANE_ICON_SRC = "/icons/plane-white.png";
 export const SELECTED_PLANE_ICON_W = 40;

@@ -5,6 +5,7 @@ import type { RefObject } from "react";
 import type maplibregl from "maplibre-gl";
 import type { GeoJSONSource } from "maplibre-gl";
 import { loadSchedule } from "@/lib/schedule";
+import { AIRPORT_ZOOM_FILTER } from "@/lib/mapConstants";
 import type { Airport, ScheduleEntry } from "@/lib/types";
 
 type UseAirportSelectionArgs = {
@@ -66,8 +67,12 @@ export function useAirportSelection({ mapRef, onSelect }: UseAirportSelectionArg
       map.setFilter(
         "airport-dot",
         selectedAirport
-          ? ["!=", ["get", "icao"], selectedAirport.icao_code ?? ""]
-          : null
+          ? [
+              "all",
+              AIRPORT_ZOOM_FILTER,
+              ["!=", ["get", "icao"], selectedAirport.icao_code ?? ""],
+            ]
+          : AIRPORT_ZOOM_FILTER
       );
     }
 

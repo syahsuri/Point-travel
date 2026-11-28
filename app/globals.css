@@ -105,15 +105,15 @@ body {
   overflow: visible;
 }
 
+/* Zoom buttons: just left of the bottom-right legend/credits stack (w-80 at right-4). */
 .maplibregl-ctrl-bottom-right {
-  bottom: 30px !important;
+  right: 21rem !important;
+  bottom: 0 !important;
 }
 
-@media (max-width: 768px) {
+/* Phones pinch-zoom; the buttons only covered the map. */
+@media (max-width: 767.98px) {
   .maplibregl-ctrl-bottom-right {
-    top: 50% !important;
-    bottom: auto !important;
-    right: 8px !important;
-    transform: translateY(-50%);
+    display: none;
   }
 }

@@ -52,7 +52,9 @@ function toStateVector(r: RawState): StateVector | null {
     destination_iata: str(r.destination_iata),
     scheduled_departure: str(r.scheduled_departure),
     scheduled_arrival: str(r.scheduled_arrival),
-    flight_status: str(r.flight_status),
+    // Pipeline says "Ascending"; "Climbing" is the aviation term.
+    flight_status:
+      r.flight_status === "Ascending" ? "Climbing" : str(r.flight_status),
   };
 }
 

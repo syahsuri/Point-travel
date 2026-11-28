@@ -2,11 +2,83 @@
 
 import { useState } from "react";
 import type { StateVector, Airport } from "@/lib/types";
-import { timeAgo } from "@/lib/format";
+import { ageSeconds, formatAge } from "@/lib/format";
 import { planeTypeBadgeClass, planeTypeShortLabel } from "@/lib/planeType";
-import { squawkAlertLevel } from "@/lib/squawk";
+import { squawkAlertLevel, squawkLabel } from "@/lib/squawk";
 
+// The whole feed runs ~1–2 min behind, so a row shows its age only when it
+// lags the newest position by this much.
+const STALE_SECS = 120;
+// Footer turns amber when even the newest position is this old (pipeline stalled).
+const FEED_STALE_SECS = 300;
 
+const callsignOf = (p: StateVector) => (p.callsign ?? "").trim() || p.icao24;
+const isMilitary = (p: StateVector) =>
+  p.plane_type === "Military" || p.plane_type === "Military & Special";
+
+/** Display strings for one flights-list row (shared by mobile + desktop). */
+function planeRow(p: StateVector, dataAge: number | null) {
+  const age = ageSeconds(p.last_time_position);
+  return {
+    cs: callsignOf(p),
+    alt:
+      typeof p.baro_altitude === "number"
+        ? `${Math.round(p.baro_altitude * 3.281).toLocaleString()} ft`
+        : "—",
+    spd:
+      typeof p.velocity === "number"
+        ? `${Math.round(p.velocity * 1.944)} kts`
+        : "—",
+    route:
+      p.origin_iata || p.destination_iata
+        ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"}`
+        : null,
+    meta: p.flight_status ?? "",
+    stale:
+      age !== null && dataAge !== null && age - dataAge >= STALE_SECS
+        ? formatAge(age)
+        : null,
+    // Civil is the default; only flag the exceptions.
+    badgeClass: p.plane_type === "Civil" ? null : planeTypeBadgeClass(p.plane_type),
+    badgeLabel: planeTypeShortLabel(p.plane_type),
+    emergency:
+      squawkAlertLevel(p.squawk) === "emergency" ? squawkLabel(p.squawk) : null,
+  };
+}
+
+function FilterChip({
+  label,
+  count,
+  on,
+  dotClass,
+  onClick,
+  sizeClass,
+}: {
+  label: string;
+  count: number;
+  on: boolean;
+  dotClass: string;
+  onClick: () => void;
+  sizeClass: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-full border font-semibold transition-colors ${sizeClass} ${on
+        ? "border-white/25 bg-white/15 text-white"
+        : "border-dashed border-white/15 text-white/40 hover:text-white/70"
+        }`}
+    >
+      <span
+        className={`h-2 w-2 rounded-full ${on ? dotClass : "border border-white/40"}`}
+      />
+      {label}
+      <span className={on ? "text-white/60" : "text-white/30"}>{count}</span>
+    </button>
+  );
+}
 
 type SidePanelProps = {
   panelTab: "flights" | "airports";
@@ -83,15 +155,59 @@ export default function SidePanel({
     }
   };
 
-  const sortedPlanes = [...filteredPlanes].sort((a, b) => {
-    return getPlaneTypePriority(a.plane_type) - getPlaneTypePriority(b.plane_type);
-  });
+  // Callsign as tie-breaker keeps rows from jumping on every 15s poll.
+  const sortedPlanes = [...filteredPlanes].sort(
+    (a, b) =>
+      getPlaneTypePriority(a.plane_type) - getPlaneTypePriority(b.plane_type) ||
+      Number(!a.callsign?.trim()) - Number(!b.callsign?.trim()) || // hex-only last
+      callsignOf(a).localeCompare(callsignOf(b))
+  );
 
   const displayedPlanes = sortedPlanes.filter((p) => {
-    if (p.plane_type === "Military" || p.plane_type === "Military & Special") return showMilitary;
+    if (isMilitary(p)) return showMilitary;
     if (p.plane_type === "LADD") return showLadd;
     return showCivil;
   });
+
+  const counts = { military: 0, ladd: 0, civil: 0 };
+  for (const p of filteredPlanes) {
+    if (isMilitary(p)) counts.military++;
+    else if (p.plane_type === "LADD") counts.ladd++;
+    else counts.civil++;
+  }
+
+  // Freshest position in the feed: shows when the data itself stops updating.
+  const dataAge = planeList.reduce<number | null>((min, p) => {
+    const a = ageSeconds(p.last_time_position);
+    return a !== null && (min === null || a < min) ? a : min;
+  }, null);
+
+  const renderChips = (sizeClass: string) => (
+    <>
+      <FilterChip label="Military" count={counts.military} on={showMilitary} dotClass="bg-amber-400" onClick={() => setShowMilitary((v) => !v)} sizeClass={sizeClass} />
+      <FilterChip label="LADD" count={counts.ladd} on={showLadd} dotClass="bg-slate-300" onClick={() => setShowLadd((v) => !v)} sizeClass={sizeClass} />
+      <FilterChip label="Civil" count={counts.civil} on={showCivil} dotClass="bg-sky-400" onClick={() => setShowCivil((v) => !v)} sizeClass={sizeClass} />
+    </>
+  );
+
+  const renderUpdated = (sizeClass: string) =>
+    dataAge !== null && (
+      <p
+        title="Age of the newest aircraft position in the feed"
+        className={`shrink-0 border-t border-white/10 text-right ${sizeClass} ${dataAge >= FEED_STALE_SECS ? "text-amber-400" : "text-white/40"}`}
+      >
+        Updated {formatAge(dataAge)}
+      </p>
+    );
+
+  const renderMeta = (r: ReturnType<typeof planeRow>) =>
+    (r.meta || r.stale) && (
+      <span className="shrink-0">
+        {r.meta}
+        {r.meta && r.stale && " · "}
+        {r.stale && <span className="text-amber-400">{r.stale}</span>}
+      </span>
+    );
 
   return (
     <>
@@ -166,59 +282,11 @@ export default function SidePanel({
                 />
               </div>
               <div className="flex gap-1.5 pb-2 shrink-0 justify-start">
-                <button
-                  type="button"
-                  onClick={() => setShowMilitary(v => !v)}
-                  className={`rounded px-2.5 py-1.5 text-xs font-bold border transition-all ${showMilitary
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    : "bg-white/5 text-white/35 border-white/5 opacity-60"
-                    }`}
-                >
-                  Military
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowLadd(v => !v)}
-                  className={`rounded px-2.5 py-1.5 text-xs font-bold border transition-all ${showLadd
-                    ? "bg-slate-500/20 text-slate-300 border-slate-500/40"
-                    : "bg-white/5 text-white/35 border-white/5 opacity-60"
-                    }`}
-                >
-                  LADD
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCivil(v => !v)}
-                  className={`rounded px-2.5 py-1.5 text-xs font-bold border transition-all ${showCivil
-                    ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                    : "bg-white/5 text-white/35 border-white/5 opacity-60"
-                    }`}
-                >
-                  Civil
-                </button>
+                {renderChips("px-2.5 py-1.5 text-xs")}
               </div>
               <ul className="divide-y divide-white/10 overflow-y-auto flex-1 text-xs">
                 {displayedPlanes.map((p) => {
-                  const cs = (p.callsign ?? "").trim() || p.icao24;
-                  const alt =
-                    typeof p.baro_altitude === "number"
-                      ? `${Math.round(
-                        p.baro_altitude * 3.281
-                      ).toLocaleString()} ft`
-                      : "—";
-                  const spd =
-                    typeof p.velocity === "number"
-                      ? `${Math.round(p.velocity * 1.944)} kts`
-                      : "—";
-                  const route =
-                    p.origin_iata || p.destination_iata
-                      ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
-                      }`
-                      : null;
-                  const ago = timeAgo(p.last_time_position);
-                  const meta = [p.flight_status, ago]
-                    .filter(Boolean)
-                    .join(" · ");
+                  const r = planeRow(p, dataAge);
                   return (
                     <li key={p.icao24}>
                       <button
@@ -234,36 +302,32 @@ export default function SidePanel({
                                 }`}
                             />
                             <span className="truncate font-semibold text-white text-sm">
-                              {cs}
+                              {r.cs}
                             </span>
-                            {planeTypeBadgeClass(p.plane_type) && (
+                            {r.badgeClass && (
                               <span
-                                className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${planeTypeBadgeClass(p.plane_type)}`}
+                                className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${r.badgeClass}`}
                               >
-                                {planeTypeShortLabel(p.plane_type)}
+                                {r.badgeLabel}
+                              </span>
+                            )}
+                            {r.emergency && (
+                              <span
+                                title={`Squawk ${p.squawk}`}
+                                className="shrink-0 animate-pulse rounded border border-red-500/50 bg-red-600/35 px-1 py-px text-[9px] font-bold uppercase leading-none text-red-200"
+                              >
+                                {r.emergency}
                               </span>
                             )}
                           </span>
                           <span className="shrink-0 text-white/60 text-xs flex items-center gap-1.5">
-                            <span>{alt} · {spd}</span>
-                            {p.squawk && (
-                              <span
-                                className={`shrink-0 rounded px-1 py-px text-[9px] font-mono font-bold leading-none ${squawkAlertLevel(p.squawk) === "emergency"
-                                  ? "bg-red-600/35 text-red-200 border-red-500/50 animate-pulse"
-                                  : squawkAlertLevel(p.squawk) === "operational"
-                                    ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
-                                    : "bg-white/5 text-white/70 border-white/10"
-                                  }`}
-                              >
-                                {p.squawk}
-                              </span>
-                            )}
+                            <span>{r.alt} · {r.spd}</span>
                           </span>
                         </span>
-                        {(route || meta) && (
+                        {(r.route || r.meta || r.stale) && (
                           <span className="flex w-full items-center justify-between gap-2 pl-4 text-xs text-white/50">
-                            <span className="truncate">{route ?? ""}</span>
-                            {meta && <span className="shrink-0">{meta}</span>}
+                            <span className="truncate">{r.route ?? ""}</span>
+                            {renderMeta(r)}
                           </span>
                         )}
                       </button>
@@ -271,6 +335,7 @@ export default function SidePanel({
                   );
                 })}
               </ul>
+              {renderUpdated("px-3 pt-2 text-xs")}
             </div>
           )}
 
@@ -367,59 +432,11 @@ export default function SidePanel({
               />
             </div>
             <div className="flex gap-1 px-2 pb-1.5 justify-start">
-              <button
-                type="button"
-                onClick={() => setShowMilitary(v => !v)}
-                className={`rounded px-2 py-1 text-[10px] font-bold border transition-all ${showMilitary
-                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                  : "bg-white/5 text-white/35 border-white/5 opacity-60"
-                  }`}
-              >
-                Military
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLadd(v => !v)}
-                className={`rounded px-2 py-1 text-[10px] font-bold border transition-all ${showLadd
-                  ? "bg-slate-500/20 text-slate-300 border-slate-500/40"
-                  : "bg-white/5 text-white/35 border-white/5 opacity-60"
-                  }`}
-              >
-                LADD
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCivil(v => !v)}
-                className={`rounded px-2 py-1 text-[10px] font-bold border transition-all ${showCivil
-                  ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                  : "bg-white/5 text-white/35 border-white/5 opacity-60"
-                  }`}
-              >
-                Civil
-              </button>
+              {renderChips("px-2 py-0.5 text-[10px]")}
             </div>
             <ul className="divide-y divide-white/5 overflow-y-auto">
               {displayedPlanes.map((p) => {
-                const cs = (p.callsign ?? "").trim() || p.icao24;
-                const alt =
-                  typeof p.baro_altitude === "number"
-                    ? `${Math.round(
-                      p.baro_altitude * 3.281
-                    ).toLocaleString()} ft`
-                    : "—";
-                const spd =
-                  typeof p.velocity === "number"
-                    ? `${Math.round(p.velocity * 1.944)} kts`
-                    : "—";
-                const route =
-                  p.origin_iata || p.destination_iata
-                    ? `${p.origin_iata ?? "???"} → ${p.destination_iata ?? "???"
-                    }`
-                    : null;
-                const ago = timeAgo(p.last_time_position);
-                const meta = [p.flight_status, ago]
-                  .filter(Boolean)
-                  .join(" · ");
+                const r = planeRow(p, dataAge);
                 return (
                   <li key={p.icao24}>
                     <button
@@ -434,35 +451,31 @@ export default function SidePanel({
                             className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${p.on_ground ? "bg-white/40" : "bg-emerald-400"
                               }`}
                           />
-                          <span className="truncate font-medium text-white/90">{cs}</span>
-                          {planeTypeBadgeClass(p.plane_type) && (
+                          <span className="truncate font-medium text-white/90">{r.cs}</span>
+                          {r.badgeClass && (
                             <span
-                              className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${planeTypeBadgeClass(p.plane_type)}`}
+                              className={`shrink-0 rounded border px-1 py-px text-[8px] font-bold uppercase leading-none ${r.badgeClass}`}
                             >
-                              {planeTypeShortLabel(p.plane_type)}
+                              {r.badgeLabel}
+                            </span>
+                          )}
+                          {r.emergency && (
+                            <span
+                              title={`Squawk ${p.squawk}`}
+                              className="shrink-0 animate-pulse rounded border border-red-500/50 bg-red-600/35 px-1 py-px text-[9px] font-bold uppercase leading-none text-red-200"
+                            >
+                              {r.emergency}
                             </span>
                           )}
                         </span>
                         <span className="shrink-0 text-white/50 flex items-center gap-1.5">
-                          <span>{alt} · {spd}</span>
-                          {p.squawk && (
-                            <span
-                              className={`shrink-0 rounded px-1 py-px text-[8px] font-mono font-bold leading-none ${squawkAlertLevel(p.squawk) === "emergency"
-                                ? "bg-red-600/35 text-red-200 border-red-500/50 animate-pulse"
-                                : squawkAlertLevel(p.squawk) === "operational"
-                                  ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
-                                  : "bg-white/5 text-white/70 border-white/10"
-                                }`}
-                            >
-                              {p.squawk}
-                            </span>
-                          )}
+                          <span>{r.alt} · {r.spd}</span>
                         </span>
                       </span>
-                      {(route || meta) && (
+                      {(r.route || r.meta || r.stale) && (
                         <span className="flex w-full items-center justify-between gap-2 pl-3 text-[10px] text-white/45">
-                          <span className="truncate">{route ?? ""}</span>
-                          {meta && <span className="shrink-0">{meta}</span>}
+                          <span className="truncate">{r.route ?? ""}</span>
+                          {renderMeta(r)}
                         </span>
                       )}
                     </button>
@@ -470,6 +483,7 @@ export default function SidePanel({
                 );
               })}
             </ul>
+            {renderUpdated("px-3 py-1 text-[10px]")}
           </>
         )}
 

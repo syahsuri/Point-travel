@@ -9,7 +9,6 @@ import { setBasemap, BASE_STYLE } from "@/lib/mapStyle";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
 import { readPlanesCache, writePlanesCache } from "@/lib/planesCache";
 import { posSecs } from "@/lib/format";
-import { altitudeColorForValue } from "@/lib/altitudeColor";
 import { ALL_CATEGORY_ICON_CODES } from "@/lib/aircraftIcon";
 
 import {
@@ -22,11 +21,10 @@ import {
 } from "@/lib/geo";
 import {
   INDONESIA_BOUNDS,
+  WEST_INDONESIA_BOUNDS,
   ASEAN_BOUNDS,
-  PLANE_SDF_ICON_SRC,
-  PLANE_SDF_ICON_H,
-  PLANE_SDF_ICON_W,
   PLANE_ICON_SIZE,
+  AIRPORT_ZOOM_FILTER,
 } from "@/lib/mapConstants";
 import type { StateVector, Airport } from "@/lib/types";
 
@@ -162,13 +160,17 @@ export function useFlightMapEngine({
         return [] as Airport[];
       });
 
+    // ASEAN maxBounds is shorter than a portrait phone view, so MapLibre
+    // zoomed in and shifted the center north (Philippines). Narrow screens
+    // drop the limits and start on western Indonesia.
+    const narrow = !window.matchMedia("(min-width: 768px)").matches;
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: BASE_STYLE,
-      bounds: INDONESIA_BOUNDS,
-      fitBoundsOptions: { padding: 20 },
-      maxBounds: ASEAN_BOUNDS,
-      minZoom: 3.5,
+      bounds: narrow ? WEST_INDONESIA_BOUNDS : INDONESIA_BOUNDS,
+      fitBoundsOptions: { padding: narrow ? 8 : 20 },
+      maxBounds: narrow ? undefined : ASEAN_BOUNDS,
+      minZoom: narrow ? 2 : 3.5,
       attributionControl: false,
       pitchWithRotate: false,
       dragRotate: false,
@@ -232,12 +234,6 @@ export function useFlightMapEngine({
         loadIcon("/icons/airport-unselected.png", "airport-unselected"),
         loadIcon("/icons/airport.png", "airport-selected"),
         loadIcon("/icons/nyan-cat.gif", "plane-chaos"),
-        loadSdfIcon(
-          PLANE_SDF_ICON_SRC,
-          "plane-sdf",
-          PLANE_SDF_ICON_H,
-          PLANE_SDF_ICON_W
-        ),
         ...ALL_CATEGORY_ICON_CODES.map((code) =>
           loadSdfIcon(
             `/icons/planes-category/${code}.svg`,
@@ -564,6 +560,7 @@ export function useFlightMapEngine({
                 type: "symbol",
                 source: "airports",
                 minzoom: 4,
+                filter: AIRPORT_ZOOM_FILTER,
                 layout: {
                   "icon-image": "airport-selected",
                   "icon-size": [

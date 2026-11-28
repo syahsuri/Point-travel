@@ -10,7 +10,11 @@ import { useNearMissRadar } from "@/lib/hooks/useNearMissRadar";
 import { useChaosModeVisuals } from "@/lib/hooks/useChaosModeVisuals";
 import { haversineMeters } from "@/lib/geo";
 import { timeAgo, fmtSched, statusTextClass, aircraftCategoryLabel } from "@/lib/format";
-import { type Basemap, INDONESIA_BOUNDS } from "@/lib/mapConstants";
+import {
+  type Basemap,
+  INDONESIA_BOUNDS,
+  WEST_INDONESIA_BOUNDS,
+} from "@/lib/mapConstants";
 import { setBasemap } from "@/lib/mapStyle";
 import { useFlightMapEngine } from "@/lib/hooks/useFlightMapEngine";
 import { altitudeColorExpression } from "@/lib/altitudeColor";
@@ -21,7 +25,6 @@ import ClockBadge from "@/components/flight-map/ClockBadge";
 import TravelBadge from "@/components/flight-map/TravelBadge";
 import ConflictBadge from "@/components/flight-map/ConflictBadge";
 import ChaosOverlay from "@/components/flight-map/ChaosOverlay";
-import AttributionFooter from "@/components/flight-map/AttributionFooter";
 import BasemapSwitcher from "@/components/flight-map/BasemapSwitcher";
 import SidePanel from "@/components/flight-map/SidePanel";
 import PlaneDetailSidebar from "@/components/flight-map/PlaneDetailSidebar";
@@ -88,7 +91,9 @@ export default function FlightMap() {
   function resetMapView() {
     const map = mapRef.current;
     if (!map) return;
-    map.fitBounds(INDONESIA_BOUNDS, { padding: 20 });
+    map.fitBounds(isDesktop ? INDONESIA_BOUNDS : WEST_INDONESIA_BOUNDS, {
+      padding: isDesktop ? 20 : 8,
+    });
   }
 
   useEffect(() => {
@@ -512,12 +517,6 @@ export default function FlightMap() {
           }}
         />
 
-        <AltitudeLegend
-          visible={showAltitudeColors}
-          selectedAltitude={selected?.baro_altitude}
-          mapInteracting={mapInteracting || settingsOpen}
-        />
-
         <SidePanel
           panelTab={panelTab}
           onPanelTabChange={setPanelTab}
@@ -572,8 +571,16 @@ export default function FlightMap() {
             onScheduleClick={handleScheduleClick}
           />
         )}
-        <AttributionFooter />
-        <MapAttribution />
+        {/* Bottom-right stack: altitude legend + all credits. Zoom buttons sit
+            to its left (globals.css .maplibregl-ctrl-bottom-right). */}
+        <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex w-[min(20rem,calc(100%-1rem))] flex-col gap-1.5 md:right-4">
+          <AltitudeLegend
+            visible={showAltitudeColors}
+            selectedAltitude={selected?.baro_altitude}
+            mapInteracting={mapInteracting || settingsOpen}
+          />
+          <MapAttribution />
+        </div>
       </div>
 
       <NavDrawer open={navOpen} onOpenChange={setNavOpen} hidden={listOpen && !isDesktop} />
