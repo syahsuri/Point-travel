@@ -77,9 +77,10 @@ const RENDER_DELAY_MS = 16_000; // sedikit di atas POLL_MS biar keyframe kedua s
 // every plane. 120s covers the usual gap between reports (p90 ~66s, 2026-11-28)
 // with room for a late poll.
 const MAX_EXTRAP_SEC = 120;
-// A report already this old on arrival is stale (pipeline "Lost Signal" uses
-// the same 300s): its cap counts from report time, so it is not flown minutes ahead.
-const STALE_REPORT_SEC = 300;
+// A report already this old on arrival is stale: its cap counts from report
+// time. Matches the pipeline's 20-min cutoff (flight_positions.py drops older
+// positions), so in practice every plane on the map is dead-reckoned to now.
+const STALE_REPORT_SEC = 1200;
 
 type Keyframe = {
   t: number; // report time (s)
